@@ -11,6 +11,8 @@ void watchface_init(void);
 
 void watchface_handle_button_event(PebbleEvent *e);
 
+void watchface_handle_touch_event(const TouchEvent *touch_event);
+
 AppInstallId watchface_get_default_install_id(void);
 
 void watchface_launch_default(const CompositorTransition *animation);
