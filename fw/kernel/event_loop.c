@@ -359,6 +359,10 @@ static PBL_NOINLINE void prv_minimal_event_handler(PebbleEvent *e) {
       TouchEvent touch = e->touch.event;
       touch_wake_gate_stamp(&touch, gate);
       e->touch.event = touch;
+      // Watchfaces never see touch; the kernel owns their gestures, as it owns their buttons.
+      if (touch_nav_enabled() && !is_modal_focused && app_manager_is_watchface_running()) {
+        watchface_handle_touch_event(&touch);
+      }
       return;
     }
 #endif
