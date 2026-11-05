@@ -111,6 +111,9 @@ void watchface_handle_button_event(PebbleEvent *e) {
   }
 }
 
+void watchface_handle_touch_event(const TouchEvent *touch_event) {
+}
+
 void watchface_reset_click_manager(void) {
   WatchfaceData *data = &s_watchface_data;
   click_manager_reset(&data->click_manager);

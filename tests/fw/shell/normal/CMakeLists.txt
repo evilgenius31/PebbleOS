@@ -37,3 +37,15 @@ pbl_clar_test(test_battery_ui_fsm_percent
     CONFIG_SERVICE_BATTERY_CAPACITY_HOURS=144
   OVERRIDES dummy_board
 )
+
+pbl_clar_test(test_watchface_touch
+  SOURCES
+    fw/shell/normal/watchface_touch.c
+    fw/applib/graphics/gtypes.c
+    fw/applib/ui/layer.c
+    fw/applib/ui/recognizer/recognizer.c
+    fw/applib/ui/recognizer/recognizer_manager.c
+    fw/applib/ui/recognizer/swipe.c
+    tests/fakes/fake_rtc.c
+  DEFINES CONFIG_TOUCH
+)

@@ -50,6 +50,9 @@ void watchface_set_default_install_id(AppInstallId id) {
 void watchface_handle_button_event(PebbleEvent *e) {
 }
 
+void watchface_handle_touch_event(const TouchEvent *touch_event) {
+}
+
 void app_idle_timeout_refresh(void) {
 }
 
