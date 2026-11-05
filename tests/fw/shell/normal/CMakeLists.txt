@@ -29,3 +29,15 @@ pbl_clar_test(test_battery_ui_fsm_percent
   DEFINES CONFIG_BATTERY_WARNING_FIRST_PERCENT=12 CONFIG_BATTERY_WARNING_SECOND_PERCENT=8
   OVERRIDES dummy_board
 )
+
+pbl_clar_test(test_watchface_touch
+  SOURCES
+    fw/shell/normal/watchface_touch.c
+    fw/applib/graphics/gtypes.c
+    fw/applib/ui/layer.c
+    fw/applib/ui/recognizer/recognizer.c
+    fw/applib/ui/recognizer/recognizer_manager.c
+    fw/applib/ui/recognizer/swipe.c
+    tests/fakes/fake_rtc.c
+  DEFINES CONFIG_TOUCH
+)
