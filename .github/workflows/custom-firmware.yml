@@ -112,10 +112,15 @@ jobs:
           tag="fw-${VERSION}"
           notes="Pebble Time 2 (${BOARD}) firmware built from \`${BRANCH}\` at ${GITHUB_SHA}.
           Sideload: Pebble app > Settings > Show debug options > Devices > watch > Firmware Update Debug > Sideload FW."
+          # Only release-based branches (custom-v*) become "Latest"; dev builds are pre-releases.
+          case "$BRANCH" in
+            custom-v*) kind="--latest" ;;
+            *) kind="--prerelease" ;;
+          esac
           if gh release view "$tag" >/dev/null 2>&1; then
             gh release upload "$tag" merged/*.pbz --clobber
           else
-            gh release create "$tag" merged/*.pbz \
+            gh release create "$tag" merged/*.pbz $kind \
               --target "$GITHUB_SHA" \
               --title "${VERSION} (${BRANCH})" \
               --notes "$notes"
