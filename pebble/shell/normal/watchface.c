@@ -50,11 +50,6 @@ static bool prv_should_ignore_button_click(void) {
   return false;
 }
 
-static void prv_launch_app_via_button(AppLaunchEventConfig *config, ClickRecognizerRef recognizer) {
-  config->common.button = click_recognizer_get_button_id(recognizer);
-  app_manager_put_launch_app_event(config);
-}
-
 static bool prv_is_combo_pressed(uint8_t combo_buttons) {
   return (s_buttons_pressed & combo_buttons) == combo_buttons;
 }
@@ -238,14 +233,17 @@ static void prv_configure_click_handler(ButtonId button_id, ClickHandler single_
   cfg->click.handler = single_click_handler;
 }
 
-static void prv_launch_launcher_app(ClickRecognizerRef recognizer, void *data) {
+static void prv_launch_launcher(ButtonId button) {
   static const LauncherMenuArgs s_launcher_args = {.reset_scroll = true};
-  prv_launch_app_via_button(
-      &(AppLaunchEventConfig){
-        .id = APP_ID_LAUNCHER_MENU,
-        .common.args = &s_launcher_args,
-      },
-      recognizer);
+  app_manager_put_launch_app_event(&(AppLaunchEventConfig){
+    .id = APP_ID_LAUNCHER_MENU,
+    .common.args = &s_launcher_args,
+    .common.button = button,
+  });
+}
+
+static void prv_launch_launcher_app(ClickRecognizerRef recognizer, void *data) {
+  prv_launch_launcher(click_recognizer_get_button_id(recognizer));
 }
 
 static void prv_dismiss_timeline_peek(ClickRecognizerRef recognizer, void *data) {
@@ -315,6 +313,16 @@ void watchface_start_low_power(void) {
   prv_watchface_launch_low_power();
 }
 
+void watchface_swipe_open_launcher(void) {
+  if (prv_should_ignore_button_click() || prv_is_any_combo_active()) {
+    return;
+  }
+  prv_launch_launcher(BUTTON_ID_SELECT);
+}
+
 void watchface_reset_click_manager(void) {
   click_manager_reset(&s_click_manager);
+#ifdef CONFIG_TOUCH
+  watchface_touch_reset();
+#endif
 }

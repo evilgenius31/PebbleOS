@@ -43,3 +43,15 @@ pbl_clar_test(test_dark_mode_updater
     pebble/shell/normal/dark_mode_updater.c
     tests/fakes/fake_rtc.c
 )
+
+pbl_clar_test(test_watchface_touch
+  SOURCES
+    pebble/shell/normal/watchface_touch.c
+    pebble/applib/graphics/gtypes.c
+    pebble/applib/ui/layer.c
+    pebble/applib/ui/recognizer/recognizer.c
+    pebble/applib/ui/recognizer/recognizer_manager.c
+    pebble/applib/ui/recognizer/swipe.c
+    tests/fakes/fake_rtc.c
+  DEFINES CONFIG_TOUCH
+)
