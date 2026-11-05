@@ -1,0 +1,122 @@
+# Fork-only workflow: builds the Pebble Time 2 (obelix@pvt) firmware for the
+# custom-* branches, merges both slots into one sideloadable .pbz, and attaches
+# it to a GitHub Release so it can be downloaded straight to the phone.
+name: Custom Firmware (Time 2)
+
+on:
+  push:
+    branches: ['custom-*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: custom-firmware-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  BOARD: obelix@pvt
+  BOARD_NAME: obelix_pvt
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/coredevices/pebbleos-docker:v10
+
+    strategy:
+      matrix:
+        slot: [0, 1]
+
+    steps:
+      - name: Mark Github workspace as safe
+        run: git config --system --add safe.directory "${GITHUB_WORKSPACE}"
+
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: true
+
+      # The version string comes from `git describe`, so make sure the release
+      # tags are present even if the fork's copy of them is stale.
+      - name: Fetch release tags
+        run: |
+          git fetch --tags --force
+          git fetch --tags --force https://github.com/coredevices/PebbleOS.git
+
+      - name: Install Python dependencies
+        run: |
+          pip install -U pip
+          pip install -r requirements.txt
+
+      - name: Configure
+        run: pbl configure --board "$BOARD" -DCONFIG_FIRMWARE_SLOT=${{ matrix.slot }} -DCONFIG_RELEASE=y
+
+      - name: Build
+        run: pbl build
+
+      - name: Bundle
+        run: pbl bundle
+
+      - name: Store
+        uses: actions/upload-artifact@v7
+        with:
+          name: firmware-slot${{ matrix.slot }}
+          path: build/normal_${{ env.BOARD_NAME }}_*.pbz
+          if-no-files-found: error
+
+  merge:
+    needs: build
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Download slot bundles
+        uses: actions/download-artifact@v8
+        with:
+          pattern: firmware-slot*
+
+      - name: Merge slot-specific pbz files
+        id: merge
+        run: |
+          # e.g. normal_obelix_pvt_v4.44.1-1-g0215990e9_slot0.pbz -> v4.44.1-1-g0215990e9
+          version=$(ls firmware-slot0/normal_${BOARD_NAME}_*_slot0.pbz | \
+            sed -E "s/^.*normal_${BOARD_NAME}_//; s/_slot0\.pbz$//")
+          if [ ! -f "firmware-slot1/normal_${BOARD_NAME}_${version}_slot1.pbz" ]; then
+            echo "::error::slot1 bundle $(ls firmware-slot1/*.pbz) does not match slot0 version ${version}"
+            exit 1
+          fi
+          mkdir merged
+          python3 tools/merge_pbz.py \
+            --slot0-pbz "firmware-slot0/normal_${BOARD_NAME}_${version}_slot0.pbz" \
+            --slot1-pbz "firmware-slot1/normal_${BOARD_NAME}_${version}_slot1.pbz" \
+            --output "merged/normal_${BOARD_NAME}_${version}.pbz"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Store merged bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: firmware-${{ env.BOARD_NAME }}
+          path: merged
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.merge.outputs.version }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          tag="fw-${VERSION}"
+          notes="Pebble Time 2 (${BOARD}) firmware built from \`${BRANCH}\` at ${GITHUB_SHA}.
+          Sideload: Pebble app > Settings > Show debug options > Devices > watch > Firmware Update Debug > Sideload FW."
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" merged/*.pbz --clobber
+          else
+            gh release create "$tag" merged/*.pbz \
+              --target "$GITHUB_SHA" \
+              --title "${VERSION} (${BRANCH})" \
+              --notes "$notes"
+          fi
