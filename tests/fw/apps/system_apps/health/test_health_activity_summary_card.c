@@ -28,10 +28,10 @@ bool clock_is_24h_style(void) {
 
 void test_health_activity_summary_card__initialize(void) {
   // Pin RTC to 2024-01-06 16:19:35 UTC (Saturday 16:19 -> bin minute 975 = 16:15).
-  rtc_set_time(1704557975);
+  pbl_realtime_set(1704557975);
 
   // Setup graphics context
-  framebuffer_init(&s_fb, &(GSize){DISP_COLS, DISP_ROWS});
+  framebuffer_init(&s_fb, &(GSize){PBL_DISPLAY_WIDTH, PBL_DISPLAY_HEIGHT});
   framebuffer_clear(&s_fb);
   graphics_context_init(&s_ctx, &s_fb, GContextInitializationMode_App);
   s_app_state_get_graphics_context = &s_ctx;

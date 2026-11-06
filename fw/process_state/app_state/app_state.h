@@ -16,6 +16,7 @@
 #include <applib/battery_state_service_private.h>
 #include <applib/compass_service_private.h>
 #include <applib/connection_service_private.h>
+#include <applib/dark_mode_service_private.h>
 #include <applib/graphics/gtypes.h>
 #include <applib/graphics/text_render.h>
 #include <applib/health_service_private.h>
@@ -40,6 +41,7 @@ typedef struct ApplibInternalEventsInfo {
   EventServiceInfo will_focus_event;
   EventServiceInfo button_down_event;
   EventServiceInfo button_up_event;
+  EventServiceInfo dark_mode_change_event;
   EventServiceInfo legacy2_status_bar_change_event;
   int minute_of_last_legacy2_statusbar_change;
 } ApplibInternalEventsInfo;
@@ -107,6 +109,8 @@ PluginServiceState *app_state_get_plugin_service(void);
 LogState *app_state_get_log_state(void);
 
 BatteryStateServiceState *app_state_get_battery_state_service_state(void);
+
+DarkModeServiceState *app_state_get_dark_mode_service_state(void);
 
 BacklightServiceState *app_state_get_backlight_service_state(void);
 

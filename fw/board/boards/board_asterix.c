@@ -2,7 +2,8 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
 #include <pbl/drivers/ambient/opt3001.h>
-#include <pbl/drivers/audio.h>
+#include <pbl/drivers/audio/da7212.h>
+#include <pbl/drivers/audio/nrf5.h>
 #include <pbl/drivers/backlight/pwm.h>
 #include <pbl/drivers/display/sharp_ls013b7dh01.h>
 #include <pbl/drivers/flash/spi_nor.h>
@@ -11,29 +12,23 @@
 #include <pbl/drivers/imu/lsm6dso/lsm6dso.h>
 #include <pbl/drivers/imu/mmc5603nj/mmc5603nj.h>
 #include <pbl/drivers/input/gpio_keys.h>
-#include <pbl/drivers/mic.h>
-#include <pbl/drivers/mic/nrf5/pdm_definitions.h>
 #include <pbl/drivers/pmic/npm1300.h>
 #include <pbl/drivers/pwm/nrf5.h>
 #include <pbl/drivers/pwm/nrf5_rtc.h>
 #include <pbl/drivers/regulator/npm1300.h>
-#include <pbl/drivers/speaker/nrf5/da7212_definitions.h>
+#include <pbl/drivers/rtc/retained.h>
 #include <pbl/drivers/spi/nrf5.h>
 #include <pbl/drivers/spi_mem/nrf5_qspi.h>
 #include <pbl/drivers/temperature/nrf5.h>
 #include <pbl/drivers/uart/nrf5.h>
 #include <pbl/drivers/vibe/drv2604.h>
 #include <pbl/kernel/irq.h>
-#include <pbl/logging/logging.h>
 #include <pbl/util/size.h>
 
 #include <board/board.h>
 #include <board/otp_layout.h>
 #include <flash_region/flash_region.h>
-#include <hal/nrf_clock.h>
 #include <hal/nrf_gpio.h>
-#include <nrfx_i2s.h>
-#include <nrfx_pdm.h>
 
 PBL_SPI_MEM_NRF5_QSPI_DEFINE(s_qspi, "qspi", 8000000, PBL_GPIO(NRF5_GPIO_P0, 19, 0),
                              PBL_GPIO(NRF5_GPIO_P0, 17, 0), PBL_GPIO(NRF5_GPIO_P0, 20, 0),
@@ -105,6 +100,9 @@ PBL_NPM1300_REGULATOR_DEFINE(s_npm1300_buck1, "npm1300_buck1", &s_npm1300, PBL_N
                              false, true);
 PBL_NPM1300_REGULATOR_DEFINE(s_npm1300_buck2, "npm1300_buck2", &s_npm1300, PBL_NPM1300_BUCK2, 3000,
                              false, true);
+// Codec and microphone supply
+PBL_NPM1300_REGULATOR_DEFINE(s_npm1300_ldsw1, "npm1300_ldsw1", &s_npm1300, PBL_NPM1300_LDSW1, 1800,
+                             true, true);
 PBL_NPM1300_REGULATOR_DEFINE(s_npm1300_ldsw2, "npm1300_ldsw2", &s_npm1300, PBL_NPM1300_LDSW2, 1800,
                              true, true);
 
@@ -121,9 +119,9 @@ PBL_OPT3001_DEFINE(s_opt3001, &s_i2c_iic2.bus, 0x44, nullptr, .always_on = true)
 
 const struct pbl_als *const ALS = &s_opt3001.als;
 
-static const struct pbl_i2c_dev I2C_SLAVE_DA7212 = PBL_I2C_DEV(&s_i2c_iic2.bus, 0x1A);
+PBL_AUDIO_DA7212_DEFINE(s_da7212, "da7212", &s_i2c_iic2.bus, 0x1A, &s_npm1300_ldsw1.reg);
 
-const struct pbl_i2c_dev *const I2C_DA7212 = &I2C_SLAVE_DA7212;
+const struct pbl_i2c_dev *const I2C_DA7212 = &s_da7212.i2c;
 
 PBL_LSM6DSO_DEFINE(s_lsm6dso, &s_i2c_iic2.bus, 0x6A,
                    .int1 = PBL_IRQ_SPEC(NRF5_GPIO_P1_INTC, 13, PBL_IRQ_TYPE_EDGE_RISING),
@@ -139,49 +137,27 @@ PBL_MMC5603NJ_DEFINE(s_mmc5603nj, &s_i2c_iic2.bus, 0x30,
 
 const struct pbl_mag *const MAG = &s_mmc5603nj.mag;
 
-PBL_IRQ_CONNECT(I2S, 5, nrfx_i2s_0_irq_handler, , 0);
-
-PBL_IRQ_CONNECT(PDM, NRFX_PDM_DEFAULT_CONFIG_IRQ_PRIORITY, NRFX_PDM_INST_HANDLER_GET(0), , 0);
-
 /* PERIPHERAL ID 11 */
 
-/* Microphone */
-static MicDeviceState s_mic_state_storage;
-static MicDevice s_mic_device = {
-  .state = &s_mic_state_storage,
-  .pdm_instance = NRFX_PDM_INSTANCE(0),
-  .clk_pin = NRF_GPIO_PIN_MAP(1, 0),   // P1.00 - PDM CLK
-  .data_pin = NRF_GPIO_PIN_MAP(0, 24), // P0.24 - PDM DATA
-  .channels = 1,
-};
-MicDevice *const MIC = &s_mic_device;
+PBL_AUDIO_NRF5_PDM_DEFINE(s_mic, "mic", PBL_GPIO(NRF5_GPIO_P1, 0, 0), PBL_GPIO(NRF5_GPIO_P0, 24, 0),
+                          0);
+PBL_IRQ_CONNECT(PDM, 7, pbl_audio_nrf5_pdm_irq_handler, &s_mic, 0);
 
-/* Speaker / audio output (DA7212 codec over I2S) */
-static AudioDeviceState s_audio_state_storage;
-static void prv_audio_power_up(void) {
-  pbl_npm1300_charger_set_dischg_limit_ma(NPM1300_CHARGER, NPM1300_DISCHG_LIMIT_MA_MAX);
-}
-static void prv_audio_power_down(void) {
-  pbl_npm1300_charger_set_dischg_limit_ma(NPM1300_CHARGER, NPM1300_CONFIG.dischg_limit_ma);
-}
-static const BoardPowerOps s_audio_power_ops = {
-  .power_up = prv_audio_power_up,
-  .power_down = prv_audio_power_down,
+const struct pbl_audio *const MIC = &s_mic.audio;
+
+// DA7212 line output, the codec clocked from the I2S master clock and driving BCLK/WCLK
+static const struct pbl_audio_link s_speaker_link = {
+  .codec = &s_da7212.codec,
+  .fmt = PBL_AUDIO_FMT_I2S | PBL_AUDIO_FMT_CODEC_MASTER,
 };
-static const AudioDevice s_audio_device = {
-  .state = &s_audio_state_storage,
-  .i2s_instance = NRFX_I2S_INSTANCE(0),
-  .sck_pin = NRF_GPIO_PIN_MAP(0, 12),    // P0.12 - I2S SCK  -> DA7212 BCLK
-  .lrck_pin = NRF_GPIO_PIN_MAP(0, 7),    // P0.07 - I2S LRCK -> DA7212 WCLK
-  .mck_pin = NRF_GPIO_PIN_MAP(1, 9),     // P1.09 - I2S MCK  -> DA7212 MCLK
-  .sdout_pin = NRF_GPIO_PIN_MAP(0, 13),  // P0.13 - I2S SDOUT -> DA7212 DATA_IN
-  .sdin_pin = NRF_I2S_PIN_NOT_CONNECTED, // codec DATA_OUT unused for playback
-  .irq_priority = 5,
-  .codec = &I2C_SLAVE_DA7212,
-  .power_ops = &s_audio_power_ops,
-  .samplerate = 16000,
-};
-AudioDevice *const AUDIO = (AudioDevice *)&s_audio_device;
+
+PBL_AUDIO_NRF5_I2S_DEFINE(s_speaker, "speaker", &s_speaker_link,
+                          .sck = PBL_GPIO(NRF5_GPIO_P0, 12, 0),
+                          .lrck = PBL_GPIO(NRF5_GPIO_P0, 7, 0), .mck = PBL_GPIO(NRF5_GPIO_P1, 9, 0),
+                          .sdout = PBL_GPIO(NRF5_GPIO_P0, 13, 0));
+PBL_IRQ_CONNECT(I2S, 5, pbl_audio_nrf5_i2s_irq_handler, &s_speaker, 0);
+
+const struct pbl_audio *const SPEAKER = &s_speaker.audio;
 
 /* sensor SPI bus */
 
@@ -202,23 +178,11 @@ const Npm1300Config NPM1300_CONFIG = {
 };
 
 void board_early_init(void) {
-  PBL_LOG_ERR("asterix early init");
-
-  nrf_clock_lf_src_set(NRF_CLOCK, NRF_CLOCK_LFCLK_XTAL);
-  nrf_clock_event_clear(NRF_CLOCK, NRF_CLOCK_EVENT_LFCLKSTARTED);
-  nrf_clock_task_trigger(NRF_CLOCK, NRF_CLOCK_TASK_LFCLKSTART);
-  /* TODO: Add timeout, report failure if LFCLK does not start. For now,
-   * WDT should trigger a reboot. Calibrated RC may be used as a fallback,
-   * provided we can adjust BLE SCA settings at runtime.
-   */
-  while (!nrf_clock_event_check(NRF_CLOCK, NRF_CLOCK_EVENT_LFCLKSTARTED)) {
-  }
-  nrf_clock_event_clear(NRF_CLOCK, NRF_CLOCK_EVENT_LFCLKSTARTED);
 }
 
 void board_init(void) {
-  uint8_t da7212_powerdown[] = {0xFD /* SYSTEM_ACTIVE */, 0};
-  pbl_i2c_write(I2C_DA7212, da7212_powerdown, 2);
 }
 
 const struct pbl_temp *const DIE_TEMP = NRF5_TEMP;
+
+const struct pbl_rtc *const RTC = RETAINED_RTC;

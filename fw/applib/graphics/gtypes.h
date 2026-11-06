@@ -6,17 +6,14 @@
 
 #pragma once
 
+#include <stdint.h>
+
 #include <pbl/kernel/compiler.h>
 #include <pbl/util/math.h>
 #include <pbl/util/math_fixed.h>
 
-#include <board/display.h>
+#include <applib/platform.h>
 #include <resource/resource.h>
-
-#if !(defined(SDK) || defined(UNITTEST))
-#endif
-
-#include <stdint.h>
 
 //! @addtogroup Graphics
 //! @{
@@ -505,7 +502,7 @@ typedef GRect GRectReturn;
 #define GRECT_PRINTF_FORMAT            "{ %" PRId16 ", %" PRId16 " } { %" PRId16 ", %" PRId16 " }"
 #define GRECT_PRINTF_FORMAT_EXPLODE(r) (r).origin.x, (r).origin.y, (r).size.w, (r).size.h
 
-#define DISP_FRAME (GRect(0, 0, DISP_COLS, DISP_ROWS))
+#define DISP_FRAME (GRect(0, 0, PBL_DISPLAY_WIDTH, PBL_DISPLAY_HEIGHT))
 
 //! @internal
 static inline GRect grect_scalar_lshift(const GRect rect, int8_t s) {
@@ -771,6 +768,14 @@ typedef struct {
   //! grect_get_max_x(bitmap_bounds) - 1 and the physical data boundary.
   int16_t max_x;
 } GBitmapDataRowInfo;
+
+//! @internal
+//! data type that's used to store row data infos in a space-efficient manner
+typedef struct {
+  uint32_t offset; // uint32_t needed for rectangular framebuffers > 65535 bytes
+  uint16_t min_x;
+  uint16_t max_x;
+} GBitmapDataRowInfoInternal;
 
 typedef struct BitmapInfo {
   //! Is .addr heap allocated? Do we need to free .addr in gbitmap_deinit?

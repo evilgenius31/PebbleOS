@@ -4,11 +4,11 @@
 #include <string.h>
 
 #include <pbl/cron/cron.h>
-#include <pbl/drivers/rtc.h>
 #include <pbl/kernel/assert.h>
 #include <pbl/kernel/fatal.h>
 #include <pbl/kernel/mutex.h>
 #include <pbl/logging/logging.h>
+#include <pbl/services/clock.h>
 #include <pbl/services/notifications/alerts_preferences.h>
 #include <pbl/services/notifications/alerts_preferences_private.h>
 #include <pbl/services/notifications/do_not_disturb.h>
@@ -111,6 +111,9 @@ static bool s_notification_backlight =
 
 #define PREF_KEY_NOTIF_RESPECT_PHONE_SILENCE "notifRespectPhoneSilence"
 static bool s_notification_respect_phone_silence = false;
+
+#define PREF_KEY_NOTIF_DISMISSAL_SYNC "notifDismissalSync"
+static bool s_notification_dismissal_sync = false;
 
 #define PREF_KEY_NOTIF_GROUPING_RANGE "notifGroupingRange"
 static NotificationGroupingRange s_notification_grouping_range = NotificationGroupingRange_Never;
@@ -395,10 +398,10 @@ static void prv_migrate_vibe_intensity_to_vibe_scores(struct pbl_settings_file *
     // If the user previously set a vibration intensity, set the vibe scores based on that intensity
     if (pbl_settings_exists(file, PREF_KEY_VIBE_INTENSITY, strlen(PREF_KEY_VIBE_INTENSITY))) {
       prv_set_vibe_scores_based_on_legacy_intensity(s_vibe_intensity);
-    } else if (rtc_is_timezone_set()) {
+    } else if (clock_is_timezone_set()) {
       // Otherwise, if the timezone has been set, then we assume this is a user on 3.10 and lower
       // that has not touched their vibe intensity preferences.
-      // rtc_is_timezone_set() was chosen because it is a setting that gets written when the user
+      // clock_is_timezone_set() was chosen because it is a setting that gets written when the user
       // connects their watch to a phone
       prv_set_vibe_scores_based_on_legacy_intensity(DEFAULT_VIBE_INTENSITY);
     }
@@ -479,6 +482,7 @@ void alerts_preferences_init(void) {
   RESTORE_PREF(PREF_KEY_NOTIF_VIBE_DELAY, s_notification_vibe_delay);
   RESTORE_PREF(PREF_KEY_NOTIF_BACKLIGHT, s_notification_backlight);
   RESTORE_PREF(PREF_KEY_NOTIF_RESPECT_PHONE_SILENCE, s_notification_respect_phone_silence);
+  RESTORE_PREF(PREF_KEY_NOTIF_DISMISSAL_SYNC, s_notification_dismissal_sync);
   RESTORE_PREF(PREF_KEY_NOTIF_GROUPING_RANGE, s_notification_grouping_range);
   RESTORE_PREF(PREF_KEY_NOTIF_STATUS_BAR_STYLE, s_notification_status_bar_style);
   RESTORE_PREF(PREF_KEY_NOTIF_TEXT_SIZE, s_notification_content_size);
@@ -584,6 +588,15 @@ bool alerts_preferences_get_notification_respect_phone_silence(void) {
 void alerts_preferences_set_notification_respect_phone_silence(bool enable) {
   s_notification_respect_phone_silence = enable;
   SET_PREF(PREF_KEY_NOTIF_RESPECT_PHONE_SILENCE, s_notification_respect_phone_silence);
+}
+
+bool alerts_preferences_get_notification_dismissal_sync(void) {
+  return s_notification_dismissal_sync;
+}
+
+void alerts_preferences_set_notification_dismissal_sync(bool enable) {
+  s_notification_dismissal_sync = enable;
+  SET_PREF(PREF_KEY_NOTIF_DISMISSAL_SYNC, s_notification_dismissal_sync);
 }
 
 NotificationGroupingRange alerts_preferences_get_notification_grouping_range(void) {
@@ -988,6 +1001,7 @@ void alerts_preferences_handle_blob_db_event(PebbleBlobDBEvent *event) {
   RELOAD_IF_MATCH(PREF_KEY_NOTIF_VIBE_DELAY, s_notification_vibe_delay);
   RELOAD_IF_MATCH(PREF_KEY_NOTIF_BACKLIGHT, s_notification_backlight);
   RELOAD_IF_MATCH(PREF_KEY_NOTIF_RESPECT_PHONE_SILENCE, s_notification_respect_phone_silence);
+  RELOAD_IF_MATCH(PREF_KEY_NOTIF_DISMISSAL_SYNC, s_notification_dismissal_sync);
   RELOAD_IF_MATCH(PREF_KEY_NOTIF_GROUPING_RANGE, s_notification_grouping_range);
   RELOAD_IF_MATCH(PREF_KEY_NOTIF_STATUS_BAR_STYLE, s_notification_status_bar_style);
   RELOAD_IF_MATCH(PREF_KEY_NOTIF_TEXT_SIZE, s_notification_content_size);

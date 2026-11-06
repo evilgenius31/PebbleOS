@@ -311,20 +311,41 @@ uint32_t shell_prefs_get_language_resource_id(void) {
 void shell_prefs_set_language(ShellLanguage language) {
 }
 
+GColor shell_prefs_get_theme_highlight_color(void) {
+  return GColorBlack;
+}
+
+DarkMode shell_prefs_get_dark_mode(void) {
+  return DarkModeOff;
+}
+
+void shell_prefs_set_dark_mode(DarkMode mode) {
+}
+
+void shell_prefs_get_dark_mode_schedule(DarkModeSchedule *schedule_out) {
+  if (schedule_out) {
+    *schedule_out =
+        (DarkModeSchedule){.from_hour = 19, .from_minute = 0, .to_hour = 7, .to_minute = 0};
+  }
+}
+
+void shell_prefs_set_dark_mode_schedule(const DarkModeSchedule *schedule) {
+}
+
 FontInfo *fonts_get_system_emoji_font_for_size(unsigned int font_height) {
   return nullptr;
 }
 
 int16_t timeline_peek_get_origin_y(void) {
-  return DISP_ROWS;
+  return PBL_DISPLAY_HEIGHT;
 }
 
 int16_t timeline_peek_get_obstruction_origin_y(void) {
-  return DISP_ROWS;
+  return PBL_DISPLAY_HEIGHT;
 }
 
 int16_t mic_banner_get_obstruction_origin_y(void) {
-  return DISP_ROWS;
+  return PBL_DISPLAY_HEIGHT;
 }
 
 bool mic_banner_get_accessory_area(GRect *area_out) {

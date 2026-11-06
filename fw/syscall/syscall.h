@@ -5,12 +5,12 @@
 
 #include <pbl/bluetooth/types.h>
 #include <pbl/drivers/mag.h>
-#include <pbl/drivers/rtc.h>
 #include <pbl/kernel/compiler.h>
 #include <pbl/services/activity/activity.h>
 #include <pbl/services/app_glances/app_glance_service.h>
 #include <pbl/services/comm_session/session.h>
 #include <pbl/services/evented_timer.h>
+#include <pbl/services/time.h>
 #include <pbl/services/wakeup.h>
 #include <pbl/util/time.h>
 
@@ -38,7 +38,7 @@ int sys_test(int arg);
 
 time_t sys_get_time(void);
 void sys_get_time_ms(time_t *t, uint16_t *out_ms);
-RtcTicks sys_get_ticks(void);
+uint64_t sys_get_ticks(void);
 struct pbl_tm *sys_gmtime_r(const time_t *timep, struct pbl_tm *result);
 struct pbl_tm *sys_localtime_r(const time_t *timep, struct pbl_tm *result);
 void sys_copy_timezone_abbr(char *timezone_abbr, time_t time);
@@ -296,6 +296,10 @@ WatchInfoColor sys_watch_info_get_color(void);
 //! choice and avoid disturbing actions such as vibration if quiet time is active.
 //! @return True, if Quiet Time is currently active.
 bool sys_do_not_disturb_is_active(void);
+
+//! @return true if dark mode is on. Unlike system_theme_is_dark_mode(), this also answers for
+//! third-party apps.
+bool sys_dark_mode_is_active(void);
 //! @} // end addtogroup Preferences
 
 //! Get the time of the next enabled alarm.

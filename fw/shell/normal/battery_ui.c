@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#include <pbl/kernel/time.h>
 #include <pbl/services/battery/battery_curve.h>
 #include <pbl/services/clock.h>
 #include <pbl/services/i18n/i18n.h>
@@ -374,7 +375,7 @@ static void prv_update_ui_warning(Dialog *dialog, void *context) {
   const size_t warning_length = 64;
   char buffer[warning_length];
   const uint32_t battery_hours_left = battery_curve_get_hours_remaining(percent);
-  const char *message = clock_get_relative_daypart_string(rtc_get_time(), battery_hours_left);
+  const char *message = clock_get_relative_daypart_string(pbl_realtime(), battery_hours_left);
 
   if (message) {
     snprintf(buffer, warning_length, i18n_get("Powered 'til %s", dialog),
@@ -437,7 +438,7 @@ static void prv_display_modal(WindowStack *stack, DialogUpdateFn update_fn, void
         (font_height + text_cap_height) * num_lines + line_spacing_delta * (num_lines - 1);
     const int text_flow_inset = 6; // Modify to allow longer central lines
     text_layer_enable_screen_text_flow_and_paging(text_layer, text_flow_inset);
-    text_layer_set_size(text_layer, GSize(DISP_COLS, text_box_height));
+    text_layer_set_size(text_layer, GSize(PBL_DISPLAY_WIDTH, text_box_height));
     text_layer->layer.frame.origin.y += text_shift_y;
     text_layer_set_line_spacing_delta(text_layer, line_spacing_delta);
   }

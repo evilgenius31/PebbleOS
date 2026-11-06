@@ -5,9 +5,9 @@
 
 #include <time.h>
 
-#include <pbl/drivers/rtc.h>
 #include <pbl/kernel/syscall.h>
 #include <pbl/kernel/thread.h>
+#include <pbl/kernel/time.h>
 #include <pbl/kernel/types.h>
 #include <pbl/logging/logging.h>
 #include <pbl/services/time.h>
@@ -15,6 +15,7 @@
 
 #include <applib/app_logging.h>
 #include <logging/logging_private.h>
+#include <process_management/process_manager.h>
 #include <process_management/worker_manager.h>
 
 PBL_SYSCALL(int, sys_test, (VAL, int, arg)) {
@@ -30,15 +31,18 @@ PBL_SYSCALL(int, sys_test, (VAL, int, arg)) {
 }
 
 PBL_SYSCALL(time_t, sys_get_time) {
-  return rtc_get_time();
+  return pbl_realtime();
 }
 
 PBL_SYSCALL(void, sys_get_time_ms, (OUT, time_t *, t), (OUT, uint16_t *, out_ms)) {
-  rtc_get_time_ms(t, out_ms);
+  uint64_t now_ms = pbl_realtime_ms();
+
+  *t = (time_t)(now_ms / 1000U);
+  *out_ms = (uint16_t)(now_ms % 1000U);
 }
 
-PBL_SYSCALL(RtcTicks, sys_get_ticks) {
-  return rtc_get_ticks();
+PBL_SYSCALL(uint64_t, sys_get_ticks) {
+  return pbl_uptime_ticks();
 }
 
 PBL_SYSCALL(void, sys_pbl_log, (VAL, LogBinaryMessage *, log_message), (VAL, uint32_t, flags)) {
@@ -79,7 +83,11 @@ PBL_SYSCALL(struct pbl_tm *, sys_gmtime_r, (IN, const time_t *, timep),
 
 PBL_SYSCALL(struct pbl_tm *, sys_localtime_r, (IN, const time_t *, timep),
             (OUT_BUF, struct pbl_tm *, result, sizeof(*result))) {
-  return pbl_localtime_r(timep, result);
+  pbl_localtime_r(timep, result);
+  if (result->tm_isdst > 0 && process_manager_expects_legacy_tm_gmtoff()) {
+    result->tm_gmtoff -= time_get_dstoffset();
+  }
+  return result;
 }
 
 //! System call to exit an application gracefully.

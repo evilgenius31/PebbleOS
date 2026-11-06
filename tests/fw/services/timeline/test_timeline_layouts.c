@@ -14,6 +14,7 @@
 #include <applib/ui/window_private.h>
 #include <apps/system/timeline/pin_window.h>
 #include <clar.h>
+#include <shell/system_theme.h>
 
 // Fakes
 /////////////////////
@@ -93,7 +94,7 @@ GContext *graphics_context_get_current_context(void) {
 
 void test_timeline_layouts__initialize(void) {
   fb = malloc(sizeof(FrameBuffer));
-  framebuffer_init(fb, &(GSize){DISP_COLS, DISP_ROWS});
+  framebuffer_init(fb, &(GSize){PBL_DISPLAY_WIDTH, PBL_DISPLAY_HEIGHT});
 
   const GContextInitializationMode context_init_mode = GContextInitializationMode_System;
   graphics_context_init(&s_ctx, fb, context_init_mode);
@@ -139,7 +140,7 @@ static void prv_render_layout(LayoutId layout_id, time_t timestamp, uint16_t dur
   };
 
   TimelinePinWindow pin_window = (TimelinePinWindow){};
-  timeline_pin_window_init(&pin_window, &item, rtc_get_time());
+  timeline_pin_window_init(&pin_window, &item, pbl_realtime());
   Window *window = &pin_window.window;
 
   window_set_on_screen(window, true, true);
@@ -356,7 +357,7 @@ void test_timeline_layouts__weather_city_clears_page_arrow(void) {
   static const char *const locations[] = {"Las Vegas", "Llanfairpwllgwyngyll, Wales"};
   const size_t arrow_height = TIMELINE_CARD_ARROW_HEIGHT + 1;
   const size_t row_size = s_ctx.dest_bitmap.row_size_bytes;
-  const size_t offset = (DISP_ROWS - arrow_height) * row_size;
+  const size_t offset = (PBL_DISPLAY_HEIGHT - arrow_height) * row_size;
   uint8_t *expected = malloc(arrow_height * row_size);
   TimelineLayoutTestConfig config = s_weather_config;
   for (PreferredContentSize size = PreferredContentSizeDefault - 1;

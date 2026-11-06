@@ -9,7 +9,6 @@
 #include <pbl/drivers/gpio.h>
 #include <pbl/drivers/i2c.h>
 #include <pbl/drivers/intc.h>
-#include <pbl/drivers/rtc.h>
 #include <pbl/drivers/touch.h>
 
 /**
@@ -32,7 +31,7 @@
 /** @cond INTERNAL_HIDDEN */
 struct pbl_cst816_state {
   struct pbl_irq_spec irq;
-  RtcTicks last_irq_ticks;
+  uint64_t last_irq_ticks;
   bool enabled;
   bool work_pending;
   bool palm_down;

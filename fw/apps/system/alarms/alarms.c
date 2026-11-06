@@ -26,7 +26,6 @@
 #include <process_state/app_state/app_state.h>
 #include <resource/resource_ids.auto.h>
 #include <shell/prefs.h>
-#include <shell/system_theme.h>
 
 // Alarms app versions
 // 0: Initial version or never opened
@@ -279,7 +278,9 @@ static void prv_alarm_list_draw_row_callback(GContext *ctx, const Layer *cell_la
   // Otherwise if the alarm is smart draw according to the menu highlight.
   graphics_context_set_tint_color(
       ctx, !node->info.is_smart ? GColorClear
-                                : (cell_layer->is_highlighted ? GColorWhite : GColorBlack));
+                                : (cell_layer->is_highlighted
+                                       ? PBL_IF_COLOR_ELSE(GColorWhite, system_theme_get_bg_color())
+                                       : system_theme_get_fg_color()));
 
   char alarm_day_text[32] = {};
   MenuCellLayerConfig config = {
@@ -349,10 +350,14 @@ static void prv_push_alarms_app_opened_dialog(AlarmsAppData *data) {
       data);
   const char *header = i18n_get("Smart Alarm", data);
   ExpandableDialog *expandable_dialog = expandable_dialog_create_with_params(
-      header, RESOURCE_ID_SMART_ALARM_TINY, first_use_text, GColorBlack, GColorWhite, nullptr,
-      RESOURCE_ID_ACTION_BAR_ICON_CHECK, prv_alarms_app_opened_click_handler);
+      header, RESOURCE_ID_SMART_ALARM_TINY, first_use_text, system_theme_get_fg_color(),
+      system_theme_get_bg_color(), nullptr, RESOURCE_ID_ACTION_BAR_ICON_CHECK,
+      prv_alarms_app_opened_click_handler);
+  dialog_set_colors_follow_theme(expandable_dialog_get_dialog(expandable_dialog),
+                                 false /* dimmed */);
 
-  expandable_dialog_set_action_bar_background_color(expandable_dialog, ALARMS_APP_HIGHLIGHT_COLOR);
+  expandable_dialog_set_action_bar_background_color(
+      expandable_dialog, PBL_IF_COLOR_ELSE(ALARMS_APP_HIGHLIGHT_COLOR, GColorBlack));
   expandable_dialog_set_header(expandable_dialog, header);
 #if defined(PBL_ROUND)
   expandable_dialog_set_header_font(expandable_dialog,
@@ -392,7 +397,9 @@ static void prv_handle_init(void) {
                              .selection_changed = prv_alarm_list_selection_changed_callback
                            });
 
+#if PBL_COLOR
   menu_layer_set_highlight_colors(&data->menu_layer, ALARMS_APP_HIGHLIGHT_COLOR, GColorWhite);
+#endif
   menu_layer_set_click_config_onto_window(&data->menu_layer, &data->window);
   menu_layer_set_scroll_wrap_around(&data->menu_layer,
                                     shell_prefs_get_menu_scroll_wrap_around_enable());
@@ -403,8 +410,6 @@ static void prv_handle_init(void) {
   layer_add_child(&data->window.layer, menu_layer_get_layer(&data->menu_layer));
 
   status_bar_layer_init(&data->status_layer);
-  status_bar_layer_set_colors(&data->status_layer, PBL_IF_COLOR_ELSE(GColorWhite, GColorBlack),
-                              PBL_IF_COLOR_ELSE(GColorBlack, GColorWhite));
   status_bar_layer_set_separator_mode(&data->status_layer, StatusBarLayerSeparatorModeNone);
   layer_add_child(&data->window.layer, status_bar_layer_get_layer(&data->status_layer));
 

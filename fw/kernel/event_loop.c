@@ -11,7 +11,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <pbl/console/console.h>
 #include <pbl/cron/cron.h>
+#include <pbl/kernel/time.h>
 #include <pbl/mcu/fpu.h>
 #include <pbl/services/analytics/analytics.h>
 #include <pbl/services/battery/battery_monitor.h>
@@ -34,7 +36,6 @@
 #include <applib/graphics/graphics.h>
 #include <applib/ui/ui.h>
 #include <comm/ble/kernel_le_client/kernel_le_client.h>
-#include <console/serial_console.h>
 #include <kernel/core_dump.h>
 #include <kernel/input_buttons.h>
 #include <kernel/kernel_applib_state.h>
@@ -80,7 +81,7 @@ static int s_back_hold_timer = TIMER_INVALID_ID;
 #ifndef CONFIG_SHELL_SDK
 static const uint32_t BACK_QUICKPRESS_INTERVAL_TICKS = 300;
 static const int BACK_QUICKPRESS_COREDUMP_PRESSES = 10;
-static RtcTicks s_back_quickpress_last = 0;
+static uint64_t s_back_quickpress_last = 0;
 static int s_back_quickpress_count = 0;
 #endif
 
@@ -192,7 +193,7 @@ static void launcher_handle_button_event(PebbleEvent *e) {
     // 10 quick-presses of the back button triggers a manual coredump, if
     // that feature is enabled in system settings.
     if (button_id == BUTTON_ID_BACK) {
-      RtcTicks now = rtc_get_ticks();
+      uint64_t now = pbl_uptime_ticks();
       if ((now - s_back_quickpress_last) > BACK_QUICKPRESS_INTERVAL_TICKS) {
         s_back_quickpress_count = 0;
       }
@@ -651,7 +652,9 @@ static PBL_NOINLINE void prv_launcher_main_loop_init(void) {
 #endif
 
   notify_system_ready_for_communication();
-  serial_console_enable_prompt();
+#ifdef CONFIG_CONSOLE
+  pbl_console_enable_prompt();
+#endif
 }
 
 void launcher_main_loop(void) {

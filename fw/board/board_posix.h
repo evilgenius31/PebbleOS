@@ -3,18 +3,14 @@
 
 #pragma once
 
-#include "display.h"
-
 #include <stdint.h>
 
 #include <pbl/input/input.h>
 
 struct pbl_uart;
 typedef const struct HRMDevice HRMDevice;
-typedef const struct MicDevice MicDevice;
-typedef const struct AudioDevice AudioDevice;
 
 void board_early_init(void);
 void board_init(void);
 
-#include "board_definitions.h"
+#include <board/boards/board_native.h>

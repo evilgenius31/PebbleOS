@@ -49,3 +49,9 @@ pbl_clar_test(test_watchface_touch
     tests/fakes/fake_rtc.c
   DEFINES CONFIG_TOUCH
 )
+
+pbl_clar_test(test_dark_mode_updater
+  SOURCES
+    fw/shell/normal/dark_mode_updater.c
+    tests/fakes/fake_rtc.c
+)

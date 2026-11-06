@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Core Devices LLC
 # SPDX-License-Identifier: Apache-2.0
 
+import os
 import shlex
 import sys
 
@@ -30,7 +31,7 @@ class Console(PblCommand):
         parser.add_argument(
             "--baudrate",
             type=int,
-            help="Baudrate for the target's uart (default: the lab's, else "
+            help="Baudrate for the target's uart (default: the build's, else "
             f"{DEFAULT_BAUDRATE})",
         )
         parser.add_argument(
@@ -52,7 +53,9 @@ class Console(PblCommand):
         emulated = bool(build.config.CONFIG_QEMU or build.config.CONFIG_SOC_POSIX)
 
         watch = self.lab_watch(build, args.tty)
-        baudrate = args.baudrate or (watch.serial_baud if watch else DEFAULT_BAUDRATE)
+        baudrate = (
+            args.baudrate or build.config.CONFIG_CONSOLE_BAUDRATE or DEFAULT_BAUDRATE
+        )
         if emulated:
             tty = f"socket://{args.qemu_host}"
         elif args.tty:
@@ -64,14 +67,11 @@ class Console(PblCommand):
             self.die("no console to attach to: pass --tty, or add the watch to a lab")
 
         python = shlex.quote(sys.executable)
-        if build.config.CONFIG_PULSE_EVERYWHERE:
-            console = f"{python} {self.script('tools', 'pulse_console.py')} -t {tty}"
-        else:
-            miniterm = self.script("tools", "log_hashing", "miniterm_co.py")
-            console = f"{python} {miniterm} {tty}"
-            if not emulated:
-                # Force RTS de-asserted: on some boards RTS resets the SoC.
-                console += f" {baudrate} --rts 0"
+        terminal = self.script("tools", "console.py")
+        console = f"{python} {terminal} {tty} --baudrate {baudrate}"
+        log_dict = os.path.join(build.path, "fw", "loghash_dict.json")
+        if os.path.exists(log_dict):
+            console += f" --dict {shlex.quote(log_dict)}"
 
         if args.reconnect:
             keepalive = self.script("tools", "console_keepalive.py")

@@ -55,6 +55,7 @@ OptionMenu *settings_option_menu_create(const char *i18n_title_key,
     .icons_enabled = icons_enabled,
   };
   option_menu_configure(option_menu, &config);
+  option_menu_set_colors_follow_theme(option_menu);
   SettingsOptionMenuData *data = app_malloc_check(sizeof(SettingsOptionMenuData));
   OptionMenuCallbacks callbacks = *callbacks_ref;
   *data = (SettingsOptionMenuData){

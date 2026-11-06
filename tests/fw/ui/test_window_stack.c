@@ -15,6 +15,7 @@
 // Stubs
 ////////////////////////////////////
 
+#include <shell/system_theme.h>
 #include <stubs_app_state.h>
 
 // Fakes

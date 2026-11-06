@@ -12,16 +12,17 @@
 #include <pbl/services/i18n/i18n.h>
 #include <pbl/services/light.h>
 #include <pbl/services/new_timer/new_timer.h>
+#include <pbl/services/time.h>
 #include <pbl/services/vibes/vibe_client.h>
 #include <pbl/services/vibes/vibe_score.h>
 #include <pbl/util/units.h>
 
 #include <applib/fonts/fonts.h>
+#include <applib/platform.h>
 #include <applib/ui/dialogs/actionable_dialog.h>
 #include <applib/ui/dialogs/dialog.h>
 #include <applib/ui/dialogs/simple_dialog.h>
 #include <applib/ui/vibes.h>
-#include <board/display.h>
 #include <kernel/event_loop.h>
 #include <kernel/low_power.h>
 #include <kernel/ui/modals/modal_manager.h>
@@ -366,7 +367,7 @@ void alarm_popup_push_window(PebbleAlarmClockEvent *event) {
     pbl_strftime_r(display_time, 16, "%I:%M %p", &alarm_tm);
   }
   dialog_set_text(dialog, display_time);
-  if (PBL_ROUND && DISP_ROWS > 180) {
+  if (PBL_DISPLAY_HEIGHT > 180) {
     actionable_dialog_set_text_font(s_alarm_popup_data->alarm_popup,
                                     fonts_get_system_font(FONT_KEY_GOTHIC_36_BOLD));
   }

@@ -5,6 +5,7 @@
 #include <stdio.h>
 
 #include <pbl/fs/fs.h>
+#include <pbl/kernel/time.h>
 #include <pbl/services/blob_db/health_db.h>
 #include <pbl/util/size.h>
 
@@ -27,14 +28,14 @@ status_t blob_db_insert(BlobDBId db_id, const uint8_t *key, int key_len, const u
   return status_from_errno(pbl_settings_set(nullptr, key, key_len, val, val_len));
 }
 
-RtcTicks rtc_get_ticks(void) {
+uint64_t pbl_uptime_ticks(void) {
   return 0;
 }
 
 // Fakes
 ////////////////////////////////////////////////////////////////
 static const time_t NOW = 1471269600; // Mon, 15 Aug 2016 14:00:00 GMT
-time_t rtc_get_time(void) {
+time_t pbl_realtime(void) {
   return NOW;
 }
 

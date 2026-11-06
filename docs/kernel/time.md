@@ -1,8 +1,8 @@
 # Time and delays
 
 The kernel keeps one monotonic clock, the tick count, derived from the
-system clock source. `pbl/kernel/time.h` reads it and the CPU cycle counter;
-`pbl/kernel/delay.h` waits on them.
+system clock source, and the wall clock on top of it. `pbl/kernel/time.h`
+reads them and the CPU cycle counter; `pbl/kernel/delay.h` waits on them.
 
 ## System timer
 
@@ -38,6 +38,22 @@ event device programs its compare register.
 `pbl_cycle_get_32()` reads the CPU cycle counter (DWT `CYCCNT` on Cortex-M) at
 `pbl_cycles_per_sec()`, the current CPU clock. Use it to time short sections:
 it wraps within seconds and stops while the CPU sleeps.
+
+## Wall clock
+
+`pbl_realtime()` and `pbl_realtime_ms()` return UTC time since the epoch,
+kept as an offset from the uptime with microsecond resolution: the wall clock
+runs at the clock source rate and only jumps when `pbl_realtime_set()` sets
+it. The kernel keeps it in RAM only. The clock service restores it at boot
+from the board's RTC (`pbl/drivers/rtc.h`), and writes it back whenever the
+time is set and every `CONFIG_SERVICE_CLOCK_RTC_SAVE_INTERVAL` seconds.
+
+| SoC | RTC |
+| --- | --- |
+| nRF52 | Retained RAM: the time last saved, which does not count while off |
+| SF32LB52 | Calendar RTC on the calibrated RC10K |
+| QEMU | QEMU RTC, following the host clock |
+| POSIX | Host clock |
 
 ## Waiting
 

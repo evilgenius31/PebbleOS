@@ -2,6 +2,7 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
 #include <pbl/fs/fs.h>
+#include <pbl/kernel/time.h>
 #include <pbl/services/blob_db/reminder_db.h>
 #include <pbl/services/timeline/reminders.h>
 
@@ -25,11 +26,11 @@
 static time_t now = 0;
 static int num_events_put = 0;
 
-time_t rtc_get_time(void) {
+time_t pbl_realtime(void) {
   return now;
 }
 
-RtcTicks rtc_get_ticks(void) {
+uint64_t pbl_uptime_ticks(void) {
   return 0;
 }
 

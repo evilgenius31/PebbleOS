@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include "display.h"
-
 #include <stdint.h>
 
 #include <pbl/input/input.h>
@@ -33,10 +31,6 @@
 // Forward-declare device types
 struct pbl_uart;
 typedef const struct HRMDevice HRMDevice;
-typedef const struct MicDevice MicDevice;
-typedef const struct AudioDevice AudioDevice;
-
-extern AudioDevice *const AUDIO;
 
 void board_early_init(void);
 void board_init(void);
@@ -45,4 +39,12 @@ void board_init(void);
 #include <stdio.h>
 #define sniprintf snprintf
 
-#include "board_definitions.h"
+#ifdef CONFIG_BOARD_QEMU_EMERY
+#include <board/boards/board_qemu_emery.h>
+#elifdef CONFIG_BOARD_QEMU_FLINT
+#include <board/boards/board_qemu_flint.h>
+#elifdef CONFIG_BOARD_QEMU_GABBRO
+#include <board/boards/board_qemu_gabbro.h>
+#else
+#error "Unknown board definition"
+#endif

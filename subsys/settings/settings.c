@@ -8,15 +8,16 @@
 #include <time.h>
 
 #include <pbl/crc/crc.h>
-#include <pbl/drivers/rtc.h>
 #include <pbl/fs/fs.h>
 #include <pbl/fs/pfs.h>
 #include <pbl/kernel/assert.h>
 #include <pbl/kernel/fatal.h>
 #include <pbl/kernel/malloc.h>
+#include <pbl/kernel/time.h>
 #include <pbl/logging/logging.h>
 #include <pbl/settings/settings.h>
 #include <pbl/task_wdt/task_wdt.h>
+#include <pbl/util/math.h>
 
 PBL_LOG_MODULE_DEFINE(settings, CONFIG_SETTINGS_LOG_LEVEL);
 
@@ -206,7 +207,7 @@ static bool overwritten(struct pbl_settings_record_hdr *hdr) {
 }
 
 static uint32_t utc_time() {
-  return rtc_get_time();
+  return pbl_realtime();
 }
 
 static bool deleted(struct pbl_settings_record_hdr *hdr) {
@@ -232,12 +233,33 @@ static void compute_stats(struct pbl_settings_file *file) {
   }
 }
 
+// Largest key+val among the records a rewrite copies.
+static size_t prv_max_live_key_val_len(struct pbl_settings_file *file) {
+  size_t max_len = 0;
+  for (pbl_settings__raw_iter_begin(&file->iter); !pbl_settings__raw_iter_end(&file->iter);
+       pbl_settings__raw_iter_next(&file->iter)) {
+    struct pbl_settings_record_hdr *hdr = &file->iter.hdr;
+    if (partially_written(hdr)) {
+      break;
+    }
+    if (overwritten(hdr) || deleted(hdr)) {
+      continue;
+    }
+    const size_t len = (size_t)hdr->key_len + hdr->val_len;
+    if (len > max_len) {
+      max_len = len;
+    }
+  }
+  return max_len;
+}
+
 int pbl_settings_rewrite_filtered(struct pbl_settings_file *file,
                                   pbl_settings_filter_cb_t filter_cb, void *context) {
-  // One reusable buffer for key+val per record; sized for the worst case.
-  // Avoids two malloc/free pairs per record over what can be thousands of
-  // records on a large persist file.
-  uint8_t *kv_buf = pbl_malloc(PBL_SETTINGS_KEY_MAX_LEN + PBL_SETTINGS_VAL_MAX_LEN);
+  // One reusable buffer for key+val per record, sized to the largest record
+  // rather than the worst case: a ~2 KiB allocation can fail on a fragmented
+  // kernel heap, and then every write to a full file fails too.
+  const size_t kv_buf_len = MAX(prv_max_live_key_val_len(file), 1U);
+  uint8_t *kv_buf = pbl_malloc(kv_buf_len);
   char *name = pbl_strdup(file->name);
   if (!kv_buf || !name) {
     PBL_LOG_ERR("Could not allocate buffers to compact settings file %s", file->name);

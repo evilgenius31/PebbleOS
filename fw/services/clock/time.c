@@ -3,8 +3,8 @@
 
 #include <string.h>
 
-#include <pbl/drivers/rtc.h>
 #include <pbl/kernel/syscall.h>
+#include <pbl/kernel/time.h>
 #include <pbl/kernel/types.h>
 #include <pbl/services/time.h>
 #include <pbl/util/time.h>
@@ -123,7 +123,7 @@ bool time_util_range_spans_day(time_t start, time_t end, time_t start_of_day) {
 }
 
 time_t time_util_utc_to_local_offset(void) {
-  time_t now = rtc_get_time();
+  time_t now = pbl_realtime();
   return (time_utc_to_local(now) - now);
 }
 
@@ -152,7 +152,7 @@ int time_util_get_minute_of_day(time_t utc_sec) {
 
 // ---------------------------------------------------------------------------------------
 time_t time_start_of_today(void) {
-  time_t now = rtc_get_time();
+  time_t now = pbl_realtime();
   return time_util_get_midnight_of(now);
 }
 
@@ -162,6 +162,6 @@ PBL_SYSCALL(time_t, sys_time_start_of_today) {
 
 // ---------------------------------------------------------------------------------------
 uint32_t time_get_uptime_seconds(void) {
-  RtcTicks ticks = rtc_get_ticks();
+  uint64_t ticks = pbl_uptime_ticks();
   return ticks / PBL_TICK_HZ;
 }

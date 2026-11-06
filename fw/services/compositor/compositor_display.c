@@ -4,10 +4,10 @@
 #include <string.h>
 
 #include <pbl/drivers/display.h>
-#include <pbl/drivers/rtc.h>
 #include <pbl/kernel/assert.h>
 #include <pbl/kernel/irq.h>
 #include <pbl/kernel/malloc.h>
+#include <pbl/kernel/time.h>
 #include <pbl/services/analytics/analytics.h>
 #include <pbl/services/compositor/compositor.h>
 #include <pbl/services/compositor/compositor_private.h>
@@ -20,9 +20,9 @@
 
 static void (*s_update_complete_handler)(bool success);
 
-static RtcTicks s_flush_start_ticks;
+static uint64_t s_flush_start_ticks;
 static uint32_t s_flush_count;
-static RtcTicks s_flush_ticks;
+static uint64_t s_flush_ticks;
 
 static uint16_t s_flush_y0;
 static uint16_t s_flush_y1;
@@ -54,9 +54,9 @@ static uint8_t prv_corner_row(uint16_t y, uint8_t *save_idx) {
     return DISPLAY->corners[y];
   }
 
-  if (y >= DISP_ROWS - rows) {
-    *save_idx = rows + (DISP_ROWS - y - 1);
-    return DISPLAY->corners[DISP_ROWS - y - 1];
+  if (y >= PBL_DISPLAY_HEIGHT - rows) {
+    *save_idx = rows + (PBL_DISPLAY_HEIGHT - y - 1);
+    return DISPLAY->corners[PBL_DISPLAY_HEIGHT - y - 1];
   }
 
   return 0;
@@ -77,7 +77,7 @@ static void prv_corners_apply(FrameBuffer *fb, bool mask) {
     uint8_t *line = (uint8_t *)framebuffer_get_line(fb, y);
     uint8_t *saved = &s_saved_corners[idx * 2 * s_corner_bytes];
     uint16_t left = PIXEL_BYTE(0);
-    uint16_t right = PIXEL_BYTE(DISP_COLS - width);
+    uint16_t right = PIXEL_BYTE(PBL_DISPLAY_WIDTH - width);
     uint16_t len = PIXEL_BYTE(width - 1) - left + 1;
 
     if (mask) {
@@ -85,7 +85,7 @@ static void prv_corners_apply(FrameBuffer *fb, bool mask) {
       memcpy(&saved[s_corner_bytes], &line[right], len);
       for (uint8_t x = 0; x < width; x++) {
         prv_mask_pixel(line, x);
-        prv_mask_pixel(line, DISP_COLS - x - 1);
+        prv_mask_pixel(line, PBL_DISPLAY_WIDTH - x - 1);
       }
     } else {
       memcpy(&line[left], saved, len);
@@ -99,7 +99,7 @@ static void prv_flush_finish(void *data) {
 
   prv_corners_apply(compositor_get_framebuffer(), false);
 
-  RtcTicks elapsed = rtc_get_ticks() - s_flush_start_ticks;
+  uint64_t elapsed = pbl_uptime_ticks() - s_flush_start_ticks;
   pbl_irq_lock();
   s_flush_count++;
   s_flush_ticks += elapsed;
@@ -139,8 +139,11 @@ void compositor_display_init(void) {
   const enum pbl_display_format format = PBL_DISPLAY_FORMAT_ARGB2222;
 #endif
 
-  PBL_ASSERTN((DISPLAY->width == DISP_COLS) && (DISPLAY->height == DISP_ROWS) &&
+  PBL_ASSERTN((DISPLAY->width == PBL_DISPLAY_WIDTH) && (DISPLAY->height == PBL_DISPLAY_HEIGHT) &&
               (DISPLAY->format == format));
+#if PBL_ROUND
+  PBL_ASSERTN(DISPLAY->round_mask != nullptr);
+#endif
 
   uint8_t max_width = 0;
   for (uint8_t i = 0; i < DISPLAY->num_corners; i++) {
@@ -164,7 +167,7 @@ void compositor_display_update(void (*handle_update_complete_cb)(bool success)) 
   s_flush_y0 = fb->dirty_rect.origin.y;
   s_flush_y1 = fb->dirty_rect.origin.y + fb->dirty_rect.size.h - 1;
   s_update_complete_handler = handle_update_complete_cb;
-  s_flush_start_ticks = rtc_get_ticks();
+  s_flush_start_ticks = pbl_uptime_ticks();
 
   prv_corners_apply(fb, true);
 
@@ -185,11 +188,11 @@ bool compositor_display_update_in_progress(void) {
 void pbl_analytics_external_collect_display_stats(void) {
   pbl_irq_lock();
   uint32_t count = s_flush_count;
-  RtcTicks ticks = s_flush_ticks;
+  uint64_t ticks = s_flush_ticks;
   s_flush_count = 0;
   s_flush_ticks = 0;
   pbl_irq_unlock();
 
   PBL_ANALYTICS_SET_UNSIGNED(display_update_count, count);
-  PBL_ANALYTICS_SET_UNSIGNED(display_flush_time_ms, (uint32_t)((ticks * 1000) / RTC_TICKS_HZ));
+  PBL_ANALYTICS_SET_UNSIGNED(display_flush_time_ms, (uint32_t)((ticks * 1000) / PBL_TICK_HZ));
 }

@@ -12,6 +12,7 @@
 
 #include <pbl/kernel/assert.h>
 #include <pbl/kernel/malloc.h>
+#include <pbl/kernel/time.h>
 #include <pbl/logging/logging.h>
 #include <pbl/services/analytics/analytics.h>
 #include <pbl/services/blob_db/ios_notif_pref_db.h>
@@ -73,12 +74,12 @@
   PBL_IF_RECT_ELSE(ACTION_BAR_WIDTH, ACTION_BAR_WIDTH + RIGHTSIDE_PADDING - TEXT_MARGIN_WIDTH)
 #define ICON_WIDTH 80
 // Center icon horizontally in content area (display width minus action bar)
-#define ICON_POSITION_X                                               \
-  PBL_IF_RECT_ELSE(((DISP_COLS - ACTION_BAR_WIDTH - ICON_WIDTH) / 2), \
-                   DISP_ROWS - (ACTION_BAR_WIDTH + RIGHTSIDE_PADDING) - ICON_WIDTH)
+#define ICON_POSITION_X                                                       \
+  PBL_IF_RECT_ELSE(((PBL_DISPLAY_WIDTH - ACTION_BAR_WIDTH - ICON_WIDTH) / 2), \
+                   PBL_DISPLAY_HEIGHT - (ACTION_BAR_WIDTH + RIGHTSIDE_PADDING) - ICON_WIDTH)
 
 #if PBL_ROUND
-#define ICON_POSITION_CENTERED_X (DISP_ROWS / 2 - ICON_WIDTH / 2)
+#define ICON_POSITION_CENTERED_X (PBL_DISPLAY_HEIGHT / 2 - ICON_WIDTH / 2)
 #endif
 
 static const int16_t DOT_SIZE = 8;
@@ -183,8 +184,8 @@ typedef struct {
 // - Caller ID text area
 // - Status text area
 // Extra vertical space on larger displays is distributed to improve spacing
-#define PHONE_EXTRA_HEIGHT     PBL_IF_RECT_ELSE((DISP_ROWS - 168), 0)
-#define PHONE_ICON_POS_Y_ROUND (22 + ((DISP_ROWS > 180) ? 10 : 0))
+#define PHONE_EXTRA_HEIGHT     PBL_IF_RECT_ELSE((PBL_DISPLAY_HEIGHT - 168), 0)
+#define PHONE_ICON_POS_Y_ROUND (22 + ((PBL_DISPLAY_HEIGHT > 180) ? 10 : 0))
 
 // Default style: icon near top, text below
 #define PHONE_ICON_POS_Y_DEFAULT \
@@ -429,14 +430,14 @@ static void prv_set_caller_id_text(PebblePhoneCaller *caller) {
   }
   const int16_t content_height = lines * fonts_get_font_height(caller_id_font);
 #if PBL_ROUND
-  if (DISP_ROWS > 180) {
+  if (PBL_DISPLAY_HEIGHT > 180) {
     // Bounds origin shifts both the layer and its text box.
     const int16_t text_offset = fonts_get_font_cap_offset(caller_id_font) +
                                 2 * s_phone_ui_data->caller_id_text_layer.layer.bounds.origin.y;
     s_phone_ui_data->caller_id_text_layer.layer.frame.origin.y =
         prv_has_long_name(caller_id_font)
             ? s_phone_ui_data->style->caller_id_pos_y
-            : (DISP_ROWS - fonts_get_font_height(caller_id_font)) / 2 - text_offset;
+            : (PBL_DISPLAY_HEIGHT - fonts_get_font_height(caller_id_font)) / 2 - text_offset;
   }
 #endif
   s_phone_ui_data->caller_id_text_layer.layer.bounds.size.h = content_height;
@@ -463,7 +464,7 @@ static void prv_ring(void *unused) {
     // if we detect this bad state.
     return;
   }
-  if ((rtc_get_time() - s_phone_ui_data->ring_start_time) > MAX_RING_DURATION_S) {
+  if ((pbl_realtime() - s_phone_ui_data->ring_start_time) > MAX_RING_DURATION_S) {
     // The call-ended event never arrived (e.g. an ANCS removal lost across a
     // re-subscription); don't vibe until the user dismisses the window.
     PBL_LOG_WRN("Still ringing after %ds; stopping the vibe loop", MAX_RING_DURATION_S);
@@ -486,7 +487,7 @@ static void prv_start_ringing(void) {
   s_phone_ui_data->ring_timer = (const RegularTimerInfo){
     .cb = prv_ring,
   };
-  s_phone_ui_data->ring_start_time = rtc_get_time();
+  s_phone_ui_data->ring_start_time = pbl_realtime();
   unsigned int vibe_repeat_interval_sec;
   s_phone_ui_data->vibe_score = vibe_client_get_score(VibeClient_PhoneCalls);
   if (!s_phone_ui_data->vibe_score) {
@@ -540,7 +541,7 @@ static void prv_update_call_time(void *unused) {
   if (layer_get_hidden(&s_phone_ui_data->call_status_text_layer.layer)) {
     prv_show_call_status();
   }
-  const time_t duration = rtc_get_time() - s_phone_ui_data->call_start_time;
+  const time_t duration = pbl_realtime() - s_phone_ui_data->call_start_time;
   const int seconds = duration % PBL_SEC_PER_MIN;
   int minutes = (duration - seconds) / PBL_SEC_PER_MIN;
   if (minutes >= PBL_MIN_PER_HOUR) {
@@ -558,7 +559,7 @@ static void prv_update_call_time(void *unused) {
 
 static void prv_start_call_duration_timer(void) {
   if (s_phone_ui_data->call_start_time == 0) {
-    s_phone_ui_data->call_start_time = rtc_get_time();
+    s_phone_ui_data->call_start_time = pbl_realtime();
   }
 
   evented_timer_cancel(s_phone_ui_data->call_duration_timer);

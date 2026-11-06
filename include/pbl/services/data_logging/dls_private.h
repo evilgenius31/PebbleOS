@@ -8,11 +8,11 @@
 #include <stdlib.h>
 #include <time.h>
 
-#include <pbl/drivers/rtc.h>
 #include <pbl/fs/fs.h>
 #include <pbl/kernel/compiler.h>
 #include <pbl/kernel/mutex.h>
 #include <pbl/services/comm_session/protocol.h>
+#include <pbl/services/time.h>
 #include <pbl/util/shared_cbuf.h>
 #include <pbl/util/units.h>
 #include <pbl/util/uuid.h>
@@ -153,8 +153,8 @@ typedef struct {
   /** Bytes sent to the phone and not acked yet. */
   int num_bytes_pending;
 
-  /** Time in RTC ticks at which the pending ack times out, 0 when not waiting for one. */
-  RtcTicks ack_timeout;
+  /** Uptime in ticks at which the pending ack times out, 0 when not waiting for one. */
+  uint64_t ack_timeout;
 } DataLoggingSessionComm;
 
 /** @brief State of an active session. */

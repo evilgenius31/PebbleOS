@@ -7,11 +7,11 @@
 
 #include <stdint.h>
 
-#include <pbl/drivers/rtc.h>
 #include <pbl/kernel/msgq.h>
 #include <pbl/kernel/mutex.h>
 #include <pbl/services/hrm/hrm_activity_scene.h>
 #include <pbl/services/new_timer/new_timer.h>
+#include <pbl/services/time.h>
 #include <pbl/util/circular_buffer.h>
 #include <pbl/util/list.h>
 
@@ -88,11 +88,11 @@ typedef struct HRMSubscriberState {
   HRMFeature features;
 
   /** Tick count of the last usable reading this subscriber received. */
-  RtcTicks last_valid_bpm_ticks;
+  uint64_t last_valid_bpm_ticks;
   /** Waiting for a usable reading since @ref due_since_ticks. */
   bool is_due;
   /** Tick count at which this subscriber became due, valid while @ref is_due. */
-  RtcTicks due_since_ticks;
+  uint64_t due_since_ticks;
 } HRMSubscriberState;
 
 /**
@@ -171,7 +171,7 @@ struct HRMManagerState {
   /**
    * Tick count when the sensor, or the current optical path, was turned on; 0 while off.
    */
-  RtcTicks sensor_on_since_ticks;
+  uint64_t sensor_on_since_ticks;
   /** The unserved timeout warning was logged during this on-time. */
   bool unserved_timeout_logged;
 

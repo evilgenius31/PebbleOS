@@ -5,6 +5,7 @@
 
 #include <pbl/drivers/als.h>
 #include <pbl/kernel/mutex.h>
+#include <pbl/kernel/time.h>
 #include <pbl/services/accel_manager.h>
 #include <pbl/services/hrm/hrm_manager.h>
 #include <pbl/services/i18n/i18n.h>
@@ -21,6 +22,7 @@
 #include <resource/language_pack.h>
 #include <resource/resource_ids.auto.h>
 #include <resource/system_resource.h>
+#include <shell/normal/dark_mode_updater.h>
 #include <shell/normal/prefs_sync.h>
 #include <shell/normal/quick_launch.h>
 #include <shell/normal/watchface.h>
@@ -345,11 +347,16 @@ static bool s_als_threshold_migrated_v2 = false;
 static uint8_t s_legacy_app_render_mode = 1; // Default to scaled mode
 #endif
 
-#ifdef CONFIG_THEMING
 #define PREF_KEY_THEME_HIGHLIGHT_COLOR "themeHighlightColor"
 
 static GColor s_theme_highlight_color = GColorVividCerulean;
-#endif
+
+#define PREF_KEY_DARK_MODE          "darkMode"
+#define PREF_KEY_DARK_MODE_SCHEDULE "darkModeSchedule"
+
+static uint8_t s_dark_mode = DarkModeOff;
+#define DEFAULT_DARK_MODE_SCHEDULE {.from_hour = 19, .from_minute = 0, .to_hour = 7, .to_minute = 0}
+static DarkModeSchedule s_dark_mode_schedule = DEFAULT_DARK_MODE_SCHEDULE;
 
 #define PREF_KEY_MENU_SCROLL_WRAP_AROUND    "menuScrollWrapAround"
 #define PREF_KEY_MENU_SCROLL_VIBE_BEHAVIOR  "menuScrollVibeBehavior"
@@ -384,7 +391,7 @@ static bool prv_set_s_clock_24h(bool *new_value) {
     // Fire a tick event so watchfaces re-render with the new time format
     PebbleEvent e = {
       .type = PEBBLE_TICK_EVENT,
-      .clock_tick.tick_time = rtc_get_time(),
+      .clock_tick.tick_time = pbl_realtime(),
     };
     event_put(&e);
   } else {
@@ -935,7 +942,6 @@ static bool prv_set_s_legacy_app_render_mode(uint8_t *mode) {
 }
 #endif
 
-#ifdef CONFIG_THEMING
 // Valid theme colors (unified scheme)
 // Must match s_color_definitions in settings_themes.h
 static bool prv_is_valid_theme_color(GColor color) {
@@ -951,9 +957,9 @@ static bool prv_is_valid_theme_color(GColor color) {
     GColorGreenARGB8,          // Green
     GColorCyanARGB8,           // Cyan
     GColorVividCeruleanARGB8,  // Light Blue
-    GColorVeryLightBlueARGB8,  // Royal Blue
+    GColorBabyBlueEyesARGB8,   // Periwinkle
     GColorLavenderIndigoARGB8, // Purple
-    GColorMagentaARGB8,        // Magenta
+    GColorShockingPinkARGB8,   // Magenta
     GColorBrilliantRoseARGB8,  // Pink
   };
   for (size_t i = 0; i < ARRAY_LENGTH(valid_colors); i++) {
@@ -973,7 +979,6 @@ static bool prv_set_s_theme_highlight_color(GColor *color) {
   s_theme_highlight_color = *color;
   return true;
 }
-#endif
 
 static bool prv_set_s_menu_scroll_wrap_around(bool *enabled) {
   s_menu_scroll_wrap_around = *enabled;
@@ -1001,6 +1006,29 @@ static bool prv_set_s_music_show_progress_bar(bool *enabled) {
 
 static bool prv_set_s_music_show_album_art(bool *enabled) {
   s_music_show_album_art = *enabled;
+  return true;
+}
+
+static bool prv_set_s_dark_mode(uint8_t *mode) {
+  if (*mode >= DarkModeCount) {
+    s_dark_mode = DarkModeOff;
+    dark_mode_updater_prefs_changed();
+    return false;
+  }
+  s_dark_mode = *mode;
+  dark_mode_updater_prefs_changed();
+  return true;
+}
+
+static bool prv_set_s_dark_mode_schedule(DarkModeSchedule *schedule) {
+  if (schedule->from_hour >= 24 || schedule->from_minute >= 60 || schedule->to_hour >= 24 ||
+      schedule->to_minute >= 60) {
+    s_dark_mode_schedule = (DarkModeSchedule)DEFAULT_DARK_MODE_SCHEDULE;
+    dark_mode_updater_prefs_changed();
+    return false;
+  }
+  s_dark_mode_schedule = *schedule;
+  dark_mode_updater_prefs_changed();
   return true;
 }
 
@@ -2081,7 +2109,7 @@ time_t activity_prefs_get_activation_time(void) {
 
 void activity_prefs_set_activated(void) {
   if (s_activity_activation_timestamp == 0) {
-    s_activity_activation_timestamp = rtc_get_time();
+    s_activity_activation_timestamp = pbl_realtime();
     prv_pref_set(PREF_KEY_ACTIVITY_ACTIVATED_TIMESTAMP, &s_activity_activation_timestamp,
                  sizeof(s_activity_activation_timestamp));
   }
@@ -2367,17 +2395,16 @@ void shell_prefs_set_legacy_app_render_mode(LegacyAppRenderMode mode) {
 #endif
 
 GColor shell_prefs_get_theme_highlight_color(void) {
-#ifdef CONFIG_THEMING
-  return s_theme_highlight_color;
+#if PBL_BW
+  // No accent on black and white displays: highlights invert the theme colors
+  return system_theme_get_fg_color();
 #else
-  return PBL_IF_COLOR_ELSE(GColorVividCerulean, GColorBlack);
+  return s_theme_highlight_color;
 #endif
 }
 
 void shell_prefs_set_theme_highlight_color(GColor color) {
-#ifdef CONFIG_THEMING
   prv_pref_set(PREF_KEY_THEME_HIGHLIGHT_COLOR, &color, sizeof(GColor));
-#endif
 }
 
 bool shell_prefs_get_menu_scroll_wrap_around_enable(void) {
@@ -2434,4 +2461,25 @@ bool shell_prefs_get_music_show_album_art(void) {
 
 void shell_prefs_set_music_show_album_art(bool enable) {
   prv_pref_set(PREF_KEY_MUSIC_SHOW_ALBUM_ART, &enable, sizeof(enable));
+}
+
+DarkMode shell_prefs_get_dark_mode(void) {
+  return (DarkMode)s_dark_mode;
+}
+
+void shell_prefs_set_dark_mode(DarkMode mode) {
+  uint8_t val = (uint8_t)mode;
+  prv_pref_set(PREF_KEY_DARK_MODE, &val, sizeof(val));
+}
+
+void shell_prefs_get_dark_mode_schedule(DarkModeSchedule *schedule_out) {
+  if (schedule_out) {
+    *schedule_out = s_dark_mode_schedule;
+  }
+}
+
+void shell_prefs_set_dark_mode_schedule(const DarkModeSchedule *schedule) {
+  if (schedule) {
+    prv_pref_set(PREF_KEY_DARK_MODE_SCHEDULE, schedule, sizeof(*schedule));
+  }
 }

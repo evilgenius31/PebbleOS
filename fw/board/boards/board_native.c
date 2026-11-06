@@ -2,11 +2,12 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
 #include <pbl/drivers/ambient/posix.h>
+#include <pbl/drivers/audio/qemu.h>
 #include <pbl/drivers/backlight/posix.h>
 #include <pbl/drivers/display/sdl.h>
 #include <pbl/drivers/flash/posix.h>
 #include <pbl/drivers/imu/posix.h>
-#include <pbl/drivers/mic/qemu/mic_definitions.h>
+#include <pbl/drivers/rtc/posix.h>
 #include <pbl/drivers/temperature/posix.h>
 #include <pbl/drivers/touch/sdl.h>
 #include <pbl/drivers/uart/posix.h>
@@ -31,17 +32,21 @@ const struct pbl_uart *const BT_HCI_UART = &s_bt_hci_uart.uart;
 #define DISPLAY_FORMAT PBL_DISPLAY_FORMAT_ARGB2222
 #endif
 
+#ifdef CONFIG_PLATFORM_ROUND
+#include <pbl/drivers/panel/ls013b7dd02.h>
+#define DISPLAY_ROUND_MASK pbl_panel_ls013b7dd02_round_mask
+#else
+#define DISPLAY_ROUND_MASK nullptr
+#endif
+
 PBL_DISPLAY_SDL_DEFINE(s_display, "display", CONFIG_DISPLAY_SDL_WIDTH, CONFIG_DISPLAY_SDL_HEIGHT,
-                       DISPLAY_FORMAT);
+                       DISPLAY_FORMAT, .round_mask = DISPLAY_ROUND_MASK);
 
 const struct pbl_display *const DISPLAY = &s_display;
 
-static MicDeviceState s_mic_state;
-static MicDevice s_mic = {
-  .state = &s_mic_state,
-  .channels = 1,
-};
-MicDevice *const MIC = &s_mic;
+PBL_AUDIO_HOST_MIC_DEFINE(s_mic, "mic");
+
+const struct pbl_audio *const MIC = &s_mic.audio;
 
 void board_early_init(void) {
 }
@@ -58,6 +63,8 @@ const struct pbl_backlight *const BACKLIGHT = POSIX_BACKLIGHT;
 const struct pbl_vibe *const VIBE = POSIX_VIBE;
 
 const struct pbl_temp *const DIE_TEMP = POSIX_TEMP;
+
+const struct pbl_rtc *const RTC = POSIX_RTC;
 
 #ifdef CONFIG_TOUCH_SDL
 const struct pbl_touch *const TOUCH = SDL_TOUCH;

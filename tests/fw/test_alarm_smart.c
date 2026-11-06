@@ -51,7 +51,7 @@ static void prv_set_time(time_t day, int hour, int minute) {
   s_current_day = day;
   s_current_hour = hour;
   s_current_minute = minute;
-  rtc_set_time(day + prv_hours_and_minutes_to_seconds(hour, minute));
+  pbl_realtime_set(day + prv_hours_and_minutes_to_seconds(hour, minute));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -73,7 +73,7 @@ void test_alarm_smart__initialize(void) {
     .tm_zone = "UTC",
   };
   time_util_update_timezone(&tz_info, 0, 0);
-  rtc_set_timezone(&tz_info);
+  tz_storage_save(&tz_info);
 
   // Default to Thursday
   prv_set_time(s_thursday, 0, 0);
@@ -137,7 +137,7 @@ void test_alarm_smart__trigger_30_min_early_awake(void) {
   cl_assert_equal_i(s_num_alarm_events_put, 1);
   cl_assert_equal_i(s_num_timeline_adds, 6);
   cl_assert_equal_i(s_num_timeline_removes, 3);
-  cl_assert_equal_i(s_last_timeline_item_added->header.timestamp, rtc_get_time());
+  cl_assert_equal_i(s_last_timeline_item_added->header.timestamp, pbl_realtime());
 }
 
 void test_alarm_smart__trigger_30_min_early_vmc(void) {
@@ -154,7 +154,7 @@ void test_alarm_smart__trigger_30_min_early_vmc(void) {
   pbl_cron_wakeup();
   cl_assert_equal_i(s_num_alarms_fired, 1);
   cl_assert_equal_i(s_num_alarm_events_put, 1);
-  cl_assert_equal_i(s_last_timeline_item_added->header.timestamp, rtc_get_time());
+  cl_assert_equal_i(s_last_timeline_item_added->header.timestamp, pbl_realtime());
 }
 
 void test_alarm_smart__dont_trigger_30_min_early_deep_sleep(void) {
@@ -213,7 +213,7 @@ void test_alarm_smart__trigger_15_min_early_light_sleep(void) {
   cl_assert_equal_i(s_num_alarm_events_put, 1);
   cl_assert_equal_i(s_num_timeline_adds, 6);
   cl_assert_equal_i(s_num_timeline_removes, 3);
-  cl_assert_equal_i(s_last_timeline_item_added->header.timestamp, rtc_get_time());
+  cl_assert_equal_i(s_last_timeline_item_added->header.timestamp, pbl_realtime());
 }
 
 void test_alarm_smart__trigger_at_timeout(void) {
@@ -258,7 +258,7 @@ void test_alarm_smart__trigger_at_timeout(void) {
   cl_assert_equal_i(s_num_alarm_events_put, 1);
   cl_assert_equal_i(s_num_timeline_adds, 6);
   cl_assert_equal_i(s_num_timeline_removes, 3);
-  cl_assert_equal_i(s_last_timeline_item_added->header.timestamp, rtc_get_time());
+  cl_assert_equal_i(s_last_timeline_item_added->header.timestamp, pbl_realtime());
 }
 
 void test_alarm_smart__user_snooze_fires_after_delay(void) {
@@ -362,6 +362,33 @@ void test_alarm_smart__clock_change_still_force_triggers_sleep_poll(void) {
   cl_assert_equal_i(s_num_alarm_events_put, 1);
 }
 
+void test_alarm_smart__clock_change_after_fire_does_not_refire(void) {
+  // A smart alarm that already fired at the end of its window must not fire again on a later
+  // time zone change.
+  alarm_create(
+      &(AlarmInfo){.hour = 10, .minute = 30, .kind = ALARM_KIND_EVERYDAY, .is_smart = true});
+
+  s_sleep_state = ActivitySleepStateRestfulSleep;
+  s_sleep_state_seconds = 0;
+  s_last_vmc = 0;
+
+  prv_set_time(s_current_day, 10, 0);
+  pbl_cron_wakeup();
+  cl_assert_equal_i(s_num_alarm_events_put, 0);
+
+  // Sleep through the whole window so the guaranteed fire happens at the max counter
+  for (int i = 1; i <= SMART_ALARM_MAX_SMART_SNOOZE + 1 && s_num_alarm_events_put == 0; i++) {
+    prv_set_time(s_current_day, 10, i);
+    stub_new_timer_invoke(1);
+  }
+  cl_assert_equal_i(s_num_alarm_events_put, 1);
+
+  // Hours later the user crosses into another time zone
+  prv_set_time(s_current_day, 16, 30);
+  alarm_handle_clock_change();
+  cl_assert_equal_i(s_num_alarm_events_put, 1);
+}
+
 void test_alarm_smart__across_midnight_boundary(void) {
   prv_set_time(s_sunday, 22, 0);
 
@@ -395,7 +422,7 @@ void test_alarm_smart__across_midnight_boundary(void) {
   cl_assert_equal_i(s_num_alarm_events_put, 1);
   cl_assert_equal_i(s_num_timeline_adds, 2);
   cl_assert_equal_i(s_num_timeline_removes, 1);
-  cl_assert_equal_i(s_last_timeline_item_added->header.timestamp, rtc_get_time());
+  cl_assert_equal_i(s_last_timeline_item_added->header.timestamp, pbl_realtime());
 }
 
 static AlarmId prv_start_sleeping_smart_alarm(void) {

@@ -188,6 +188,10 @@ GColor shell_prefs_get_theme_highlight_color(void) {
   return PBL_IF_COLOR_ELSE(GColorWhite, GColorBlack);
 }
 
+GColor system_theme_get_highlight_color(void) {
+  return shell_prefs_get_theme_highlight_color();
+}
+
 bool alerts_preferences_get_notification_alternative_design(void) {
   return false;
 }
@@ -238,7 +242,7 @@ GContext *graphics_context_get_current_context(void) {
 void test_launcher_menu_layer__initialize(void) {
   // Setup framebuffer and graphics context
   fb = malloc(sizeof(FrameBuffer));
-  framebuffer_init(fb, &(GSize){DISP_COLS, DISP_ROWS});
+  framebuffer_init(fb, &(GSize){PBL_DISPLAY_WIDTH, PBL_DISPLAY_HEIGHT});
   test_graphics_context_init(&s_ctx, fb);
   graphics_context_set_antialiased(&s_ctx, true);
 
@@ -448,7 +452,7 @@ void test_launcher_menu_layer__content_size_change_keeps_selection(void) {
   GRangeVertical selection_range;
   launcher_menu_layer_get_selection_vertical_range(&launcher_menu_layer, &selection_range);
   cl_assert(selection_range.origin_y >= 0);
-  cl_assert(selection_range.origin_y + selection_range.size_h <= DISP_ROWS);
+  cl_assert(selection_range.origin_y + selection_range.size_h <= PBL_DISPLAY_HEIGHT);
 
   // Restoring a state captured with a different content size also keeps the row on screen
   launcher_menu_layer_set_selection_state(&launcher_menu_layer, &state);
@@ -456,7 +460,7 @@ void test_launcher_menu_layer__content_size_change_keeps_selection(void) {
                     selected_row);
   launcher_menu_layer_get_selection_vertical_range(&launcher_menu_layer, &selection_range);
   cl_assert(selection_range.origin_y >= 0);
-  cl_assert(selection_range.origin_y + selection_range.size_h <= DISP_ROWS);
+  cl_assert(selection_range.origin_y + selection_range.size_h <= PBL_DISPLAY_HEIGHT);
 
   launcher_menu_layer_deinit(&launcher_menu_layer);
   app_menu_data_source_deinit(&data_source);

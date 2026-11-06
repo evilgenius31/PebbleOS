@@ -393,8 +393,8 @@ static const char *prv_get_hint(SettingsBluetoothData *data) {
 
 static GRect prv_get_hint_box(void) {
   const int16_t horizontal_inset = menu_cell_basic_horizontal_inset() * 3;
-  return GRect(horizontal_inset, HINT_VERTICAL_MARGIN_PX, DISP_COLS - horizontal_inset * 2,
-               DISP_ROWS);
+  return GRect(horizontal_inset, HINT_VERTICAL_MARGIN_PX, PBL_DISPLAY_WIDTH - horizontal_inset * 2,
+               PBL_DISPLAY_HEIGHT);
 }
 
 static int16_t prv_get_hint_height_for_font(SettingsBluetoothData *data, GFont font) {
@@ -409,7 +409,7 @@ static int16_t prv_get_hint_height(SettingsBluetoothData *data, uint16_t row, GF
     return 0;
   }
   const int16_t max_height =
-      DISP_ROWS - STATUS_BAR_LAYER_HEIGHT - prv_get_row_base_height(data, row);
+      PBL_DISPLAY_HEIGHT - STATUS_BAR_LAYER_HEIGHT - prv_get_row_base_height(data, row);
   *font = system_theme_get_font(TextStyleFont_MenuCellSubtitle);
   int16_t height = prv_get_hint_height_for_font(data, *font);
   if (height > max_height) {
@@ -423,13 +423,13 @@ static void prv_draw_hint(GContext *ctx, SettingsBluetoothData *data, const GRec
                           int16_t hint_height, GFont font) {
   const GRect hint_bounds = GRect(cell_bounds->origin.x, cell_bounds->size.h - hint_height,
                                   cell_bounds->size.w, hint_height);
-  graphics_context_set_fill_color(ctx, GColorWhite);
+  graphics_context_set_fill_color(ctx, system_theme_get_bg_color());
   graphics_fill_rect(ctx, &hint_bounds);
 
   GRect box = prv_get_hint_box();
   box.origin.y += hint_bounds.origin.y;
   box.size.h = hint_height;
-  graphics_context_set_text_color(ctx, GColorBlack);
+  graphics_context_set_text_color(ctx, system_theme_get_fg_color());
   graphics_draw_text(ctx, prv_get_hint(data), font, box, GTextOverflowModeWordWrap,
                      GTextAlignmentCenter, nullptr);
 }

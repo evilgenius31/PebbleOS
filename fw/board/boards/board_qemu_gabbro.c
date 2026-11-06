@@ -8,6 +8,8 @@
 #include <pbl/drivers/gpio/qemu.h>
 #include <pbl/drivers/imu/qemu.h>
 #include <pbl/drivers/input/gpio_keys.h>
+#include <pbl/drivers/panel/ls013b7dd02.h>
+#include <pbl/drivers/rtc/qemu.h>
 #include <pbl/drivers/temperature/qemu.h>
 #include <pbl/drivers/touch/qemu.h>
 #include <pbl/drivers/vibe/qemu.h>
@@ -16,7 +18,7 @@
 #include <board/board.h>
 
 // UART device for debug serial
-#include <pbl/drivers/mic/qemu/mic_definitions.h>
+#include <pbl/drivers/audio/qemu.h>
 #include <pbl/drivers/uart/qemu.h>
 
 PBL_UART_QEMU_DEFINE(s_uart2, "uart2", QEMU_UART2_BASE, PBL_IRQN(UART2), 115200);
@@ -33,7 +35,8 @@ const struct pbl_uart *const BT_HCI_UART = &s_uart3.uart;
 
 // Display device - QEMU framebuffer
 PBL_DISPLAY_QEMU_DEFINE(s_display, "display", QEMU_DISPLAY_BASE, QEMU_DISPLAY_FB_BASE, 260, 260,
-                        PBL_DISPLAY_FORMAT_ARGB2222);
+                        PBL_DISPLAY_FORMAT_ARGB2222,
+                        .round_mask = pbl_panel_ls013b7dd02_round_mask);
 
 const struct pbl_display *const DISPLAY = &s_display.disp;
 
@@ -44,13 +47,10 @@ PBL_GPIO_KEYS_DEFINE(BUTTONS, "buttons",
                                        0),
                      PBL_GPIO_KEYS_KEY("Down", PBL_GPIO(QEMU_GPIO, 3, 0), PBL_INPUT_KEY_DOWN, 0));
 
-// Microphone (QEMU stub — feeds silence on a timer)
-static MicDeviceState s_mic_state;
-static MicDevice MIC_DEVICE = {
-  .state = &s_mic_state,
-  .channels = 1,
-};
-MicDevice *const MIC = &MIC_DEVICE;
+// Microphone fed by the host
+PBL_AUDIO_HOST_MIC_DEFINE(s_mic, "mic");
+
+const struct pbl_audio *const MIC = &s_mic.audio;
 
 PBL_IRQ_CONNECT(UART2, 5, pbl_uart_qemu_irq_handler, &s_uart2, 0);
 PBL_IRQ_CONNECT(UART1, 6, pbl_uart_qemu_irq_handler, &s_uart1, 0);
@@ -73,6 +73,8 @@ const struct pbl_backlight *const BACKLIGHT = QEMU_BACKLIGHT;
 const struct pbl_vibe *const VIBE = QEMU_VIBE;
 
 const struct pbl_temp *const DIE_TEMP = QEMU_TEMP;
+
+const struct pbl_rtc *const RTC = QEMU_RTC;
 
 const struct pbl_touch *const TOUCH = QEMU_TOUCH;
 const struct pbl_flash *const FLASH = QEMU_FLASH;

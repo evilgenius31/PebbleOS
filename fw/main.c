@@ -9,10 +9,7 @@
 #include <pbl/drivers/battery.h>
 #include <pbl/drivers/flash.h>
 #include <pbl/drivers/hrm.h>
-#include <pbl/drivers/mic.h>
 #include <pbl/drivers/otp.h>
-#include <pbl/drivers/rtc.h>
-#include <pbl/drivers/sf32lb52/rc10k.h>
 #include <pbl/drivers/vibe.h>
 #include <pbl/drivers/watchdog.h>
 #include <pbl/kernel/assert.h>
@@ -34,9 +31,6 @@
 #include <pbl/task_wdt/task_wdt.h>
 
 #include <board/board.h>
-#include <console/dbgserial_input.h>
-#include <console/pulse.h>
-#include <console/serial_console.h>
 #include <debug/debug.h>
 #include <flash_region/flash_region.h>
 #include <kernel/event_loop.h>
@@ -79,7 +73,7 @@ static void print_splash_screen(void) {
 int main(void) {
   print_splash_screen();
 
-  rtc_init();
+  clock_restore_time();
 
 #ifdef CONFIG_RECOVERY_FW
   boot_bit_clear(BOOT_BIT_RECOVERY_START_IN_PROGRESS);
@@ -106,11 +100,6 @@ static void init_drivers(void) {
   pbl_device_init_all();
   board_init();
 
-  // Console input needs timers, so it starts long after the early console.
-  dbgserial_input_init();
-
-  serial_console_init();
-
   battery_init();
 
   (void)pbl_flash_protect(FLASH, FLASH_REGION_SAFE_FIRMWARE_BEGIN,
@@ -120,13 +109,6 @@ static void init_drivers(void) {
   if (vibe_cali != MFG_INFO_VIBE_CALI_INVALID) {
     (void)pbl_vibe_set_calibration(VIBE, vibe_cali);
   }
-
-#ifdef CONFIG_MIC
-  mic_init(MIC);
-#endif
-
-  rtc_init_timers();
-  rtc_alarm_init();
 }
 
 static void clear_reset_loop_detection_bits(void) {
@@ -154,9 +136,6 @@ static PBL_NOINLINE void prv_main_task_init(void) {
   static McuRebootReason s_mcu_reboot_reason;
   s_mcu_reboot_reason = watchdog_clear_reset_flag();
 
-#ifdef CONFIG_PULSE_EVERYWHERE
-  pulse_init();
-#endif
   pbl_log_init();
 
   pebble_task_configure_idle_task();
@@ -240,13 +219,6 @@ static PBL_NOINLINE void prv_main_task_init(void) {
   pbl_bt_init();
 
   services_init();
-
-  // The RTC needs be calibrated after the mfg registry service has been initialized so we can
-  // load the measured frequency.
-#if defined(CONFIG_SOC_SF32LB52) && !defined(SF32LB52_USE_LXT)
-  rc10k_init();
-#endif
-  rtc_calibrate_frequency(mfg_info_get_rtc_freq());
 
   clear_reset_loop_detection_bits();
 
