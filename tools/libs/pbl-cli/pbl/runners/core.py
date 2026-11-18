@@ -60,13 +60,14 @@ class RunnerConfig(NamedTuple):
     board_dir: str  # boards/<board>
     soc: str | None = None  # CONFIG_SOC, e.g. "NRF52", "SF32LB52"
     hex_file: str | None = None
+    flash_files: tuple = ()  # Intel HEX files to flash, in order
     elf_file: str | None = None
     bin_file: str | None = None
     pbpack_file: str | None = None  # None on PRF builds
     firmware_slot: int | None = None  # None without multiple slots
     resources_file: str | None = None
-    resources_address: int | None = None  # in the board's flash layout
-    erase_ranges: tuple = ()  # (address, size) in the board's flash layout
+    resources_address: int | None = None  # offset in the flash
+    erase_ranges: tuple = ()  # (offset, size) in the flash
     sftool: str = "sftool"
     gdb: str | None = None
     gdb_port: int | None = None  # None for the runner's default
@@ -110,6 +111,15 @@ class Runner(ABC):
     @classmethod
     def do_create(cls, cfg, args):
         return cls(cfg)
+
+    def console_command(self):
+        """``(argv, env)`` running the build on the host with nothing on the
+        screen, its console on stdout and no port another instance would
+        want, for the runners that can. ``env`` is added to the environment.
+        """
+        raise UnsupportedOperation(
+            f"{self.name} runner cannot run the build with its console on stdout"
+        )
 
     def run(self, command):
         caps = self.capabilities()

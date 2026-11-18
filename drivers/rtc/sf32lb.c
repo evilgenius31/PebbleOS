@@ -3,6 +3,7 @@
 
 #include <errno.h>
 
+#include <pbl/devicetree.h>
 #include <pbl/drivers/clk/sf32lb.h>
 #include <pbl/drivers/rtc.h>
 #include <pbl/drivers/rtc/sf32lb.h>
@@ -14,29 +15,32 @@
 #include <hardware/sf32lb52_hpsys_cfg.h>
 #include <hardware/sf32lb52_rtc.h>
 
-// The 1 Hz calendar clock is CLK_RTC / (DIVA_INT + DIVA_FRAC / 2^14) / DIVB, CLK_RTC being the
-// RC10K.
+// The 1 Hz calendar clock is clk_rtc / (DIVA_INT + DIVA_FRAC / 2^14) / DIVB.
 #define DIVB           256U
 #define DIVA_FRAC_BITS 14U
 
 #define TIMEOUT_US 1000000U
 
+extern const struct pbl_rtc_sf32lb pbl_rtc_sf32lb_inst;
+
+static const struct pbl_rtc_sf32lb *const s_rtc = &pbl_rtc_sf32lb_inst;
+
 static inline uint32_t prv_getreg(uint32_t offset) {
-  return pbl_readl(SF32LB52_RTC_BASE + offset);
+  return pbl_readl(s_rtc->base + offset);
 }
 
 static inline void prv_putreg(uint32_t offset, uint32_t value) {
-  pbl_writel(value, SF32LB52_RTC_BASE + offset);
+  pbl_writel(value, s_rtc->base + offset);
 }
 
 static inline void prv_modreg(uint32_t offset, uint32_t clear, uint32_t set) {
-  pbl_modifyl(clear, set, SF32LB52_RTC_BASE + offset);
+  pbl_modifyl(clear, set, s_rtc->base + offset);
 }
 
 static void prv_rate_changed(struct pbl_clk_notifier *nb, uint64_t rate_mhz);
 
-static struct pbl_clk_notifier s_rc10k_nb = {
-  .clk = PBL_CLK(SF32LB_RC10K, SF32LB52_CLK_RC10K),
+static struct pbl_clk_notifier s_clk_nb = {
+  .clk = PBL_CLK(SF32LB_CLK_RTC_CTRL, SF32LB_CLK_RTC_ID),
   .fn = prv_rate_changed,
 };
 
@@ -91,8 +95,8 @@ static int prv_get_time(const struct pbl_rtc *rtc, time_t *t) {
 
   // The date reads with ERR set when it rolled over since the time was read.
   do {
-    tr = pbl_readl(SF32LB52_HPSYS_CFG_BASE + SF32LB52_HPSYS_CFG_RTC_TR_OFFSET);
-    dr = pbl_readl(SF32LB52_HPSYS_CFG_BASE + SF32LB52_HPSYS_CFG_RTC_DR_OFFSET);
+    tr = pbl_readl(s_rtc->cfg + SF32LB52_HPSYS_CFG_RTC_TR_OFFSET);
+    dr = pbl_readl(s_rtc->cfg + SF32LB52_HPSYS_CFG_RTC_DR_OFFSET);
   } while ((dr & RTC_DR_ERR) != 0U);
 
   struct pbl_tm tm = {
@@ -147,11 +151,11 @@ static int prv_set_time(const struct pbl_rtc *rtc, time_t t) {
   return prv_exit_init();
 }
 
-static int prv_init(const struct pbl_device *dev) {
+int pbl_rtc_sf32lb_init(const struct pbl_device *dev) {
   uint64_t rate_mhz;
   int ret;
 
-  ret = pbl_device_init(&SF32LB_RC10K->dev);
+  ret = pbl_device_init(&SF32LB_CLK_RTC_CTRL->dev);
   if (ret != 0) {
     return ret;
   }
@@ -165,21 +169,19 @@ static int prv_init(const struct pbl_device *dev) {
   prv_modreg(SF32LB52_RTC_CR_OFFSET, RTC_CR_FMT | RTC_CR_OSEL_MASK | RTC_CR_POL, 0U);
   prv_modreg(SF32LB52_RTC_ISR_OFFSET, RTC_ISR_INIT, 0U);
 
-  ret = pbl_clk_get_rate(&s_rc10k_nb.clk, &rate_mhz);
+  ret = pbl_clk_get_rate(&s_clk_nb.clk, &rate_mhz);
   if (ret != 0) {
     return ret;
   }
   prv_set_prescaler(rate_mhz);
-  pbl_clk_notifier_register(&s_rc10k_nb);
+  pbl_clk_notifier_register(&s_clk_nb);
 
   return prv_exit_init();
 }
 
-static const struct pbl_rtc_ops s_ops = {
+const struct pbl_rtc_ops pbl_rtc_sf32lb_ops = {
   .get_time = prv_get_time,
   .set_time = prv_set_time,
 };
 
-PBL_DEVICE_STATE_DEFINE(pbl_rtc_sf32lb);
-const struct pbl_rtc pbl_rtc_sf32lb = PBL_RTC_INIT(pbl_rtc_sf32lb, "rtc", prv_init, &s_ops);
-PBL_DEVICE_REGISTER(pbl_rtc_sf32lb, &pbl_rtc_sf32lb.dev);
+#include PBL_DT_INSTANCES(sifli_sf32lb52_rtc_rtc)

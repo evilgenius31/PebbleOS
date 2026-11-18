@@ -67,14 +67,22 @@ void pbl_posix_cpu_wait(uint64_t timeout_us) {
   }
 }
 
+#define IDLE_YIELD_US 100U
+
 void arch_idle(pbl_tick_t max_ticks) {
-  if (sched_idle_confirm()) {
-    timekeeping_idle(max_ticks);
+  if (!sched_idle_confirm()) {
+    return;
   }
+  if (max_ticks == 0U) {
+    // Nothing else lets go of the CPU, and the ISR that is due needs it.
+    pbl_posix_cpu_wait(IDLE_YIELD_US);
+    return;
+  }
+  idle_enter(max_ticks);
 }
 
 void arch_start(void) {
-  irq_reset();
+  posix_irq_reset();
   posix_run(pbl_cur);
   pthread_mutex_unlock(&posix_cpu);
   // The booting host thread is done: the kernel threads take it from here.

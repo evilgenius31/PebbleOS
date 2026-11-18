@@ -1,19 +1,18 @@
 /* SPDX-FileCopyrightText: 2025 Core Devices LLC */
 /* SPDX-License-Identifier: Apache-2.0 */
 
+#include <pbl/analytics/analytics.h>
+#include <pbl/board.h>
 #include <pbl/drivers/hrm.h>
 #include <pbl/drivers/hrm/gh3x2x.h>
 #include <pbl/logging/logging.h>
-#include <pbl/services/analytics/analytics.h>
 #include <pbl/util/math.h>
-
-#include <board/board.h>
 
 #ifdef CONFIG_GH3X2X_ALGO
 #include <math.h>
 
+#include <pbl/kernel/work.h>
 #include <pbl/services/hrm/hrm_manager.h>
-#include <pbl/services/system_task.h>
 
 #include <gh3x2x_demo_mp.h>
 #include <gh_demo.h>
@@ -104,7 +103,7 @@ static void gh3026_int_irq_callback(void *arg) {
   hal_gh3x2x_int_handler_call_back();
 
   if (s_hrm_int_flag == false) {
-    if (system_task_add_callback_from_isr(gh3026_int_callback_function, nullptr)) {
+    if (pbl_sys_work_call_from_isr(gh3026_int_callback_function, nullptr)) {
       s_hrm_int_flag = true;
     }
   }
@@ -145,7 +144,7 @@ void gh3x2x_print_fmt(const char *fmt, ...) {
   char buffer[128];
   va_list ap;
   va_start(ap, fmt);
-  vsniprintf(buffer, sizeof(buffer), fmt, ap);
+  vsnprintf(buffer, sizeof(buffer), fmt, ap);
   va_end(ap);
   PBL_LOG_ALWAYS("%s", buffer);
 #endif
@@ -245,7 +244,7 @@ static void gh3x2x_timer_callback(void *data) {
   if (param != 0x87965421) {
     // Coalesce repeated timer firings - only queue one callback at a time
     if (s_hrm_timer_flag == false) {
-      if (system_task_add_callback(gh3x2x_timer_callback, (void *)0x87965421)) {
+      if (pbl_sys_work_call(gh3x2x_timer_callback, (void *)0x87965421)) {
         s_hrm_timer_flag = true;
       }
     }
@@ -309,7 +308,7 @@ bool gh3x2x_ble_data_recv(void *context) {
     return false;
   }
 
-  if (!system_task_add_callback(gh3x2x_ble_data_recv_handle, context)) {
+  if (!pbl_sys_work_call(gh3x2x_ble_data_recv_handle, context)) {
     return false;
   }
   return true;
@@ -319,7 +318,7 @@ bool gh3x2x_ble_data_recv(void *context) {
 // GH3X2X calibration/factory testing
 
 void gh3x2x_rawdata_notify(uint32_t *p_rawdata, uint32_t data_count) {
-#ifdef CONFIG_MFG
+#ifdef CONFIG_HRM_GH3X2X_FACTORY_TEST
   HRMDevice *p_dev = HRM;
   if (p_dev == nullptr || p_dev->state->enabled == false) {
     return;
@@ -400,7 +399,7 @@ void gh3x2x_rawdata_notify(uint32_t *p_rawdata, uint32_t data_count) {
 #endif
 }
 
-#ifdef CONFIG_MFG
+#ifdef CONFIG_HRM_GH3X2X_FACTORY_TEST
 void gh3x2x_factory_test_enable(HRMDevice *dev, GH3x2xFTType test_type) {
   uint32_t mode = 0;
   if (test_type == HRM_FACTORY_TEST_CTR) { // CTR
@@ -438,25 +437,25 @@ void gh3x2x_factory_test_enable(HRMDevice *dev, GH3x2xFTType test_type) {
   Gh3x2xDemoStartSamplingWithCfgSwitch(mode, 1);
 }
 
-// shoud be called in system task
+// shoud be called in background work queue
 static void gh3x2x_ft_ctr_start_handle(void *data) {
   gh3x2x_factory_test_enable(HRM, HRM_FACTORY_TEST_CTR);
 }
 
 void gh3x2x_start_ft_ctr(void) {
-  system_task_add_callback(gh3x2x_ft_ctr_start_handle, nullptr);
+  pbl_sys_work_call(gh3x2x_ft_ctr_start_handle, nullptr);
 }
 
-// shoud be called in system task
+// shoud be called in background work queue
 static void gh3x2x_ft_leakage_start_handle(void *data) {
   gh3x2x_factory_test_enable(HRM, HRM_FACTORY_TEST_LIGHT_LEAK);
 }
 
 void gh3x2x_start_ft_leakage(void) {
-  system_task_add_callback(gh3x2x_ft_leakage_start_handle, nullptr);
+  pbl_sys_work_call(gh3x2x_ft_leakage_start_handle, nullptr);
 }
 
-// shoud be called in system task
+// shoud be called in background work queue
 static void gh3x2x_factory_test_disable_handle(void *data) {
   HRMDevice *dev = (HRMDevice *)data;
   dev->state->enabled = false;
@@ -468,7 +467,7 @@ static void gh3x2x_factory_test_disable_handle(void *data) {
 }
 
 void gh3x2x_factory_test_disable(void) {
-  system_task_add_callback(gh3x2x_factory_test_disable_handle, (void *)HRM);
+  pbl_sys_work_call(gh3x2x_factory_test_disable_handle, (void *)HRM);
 }
 
 void gh3x2x_set_work_mode(int32_t mode) {
@@ -476,7 +475,7 @@ void gh3x2x_set_work_mode(int32_t mode) {
   // always enable soft adt
   state->work_mode = mode | GH3X2X_FUNCTION_SOFT_ADT_IR;
 }
-#endif // CONFIG_MFG
+#endif // CONFIG_HRM_GH3X2X_FACTORY_TEST
 
 #endif // CONFIG_GH3X2X_ALGO
 
@@ -540,7 +539,7 @@ bool hrm_enable(HRMDevice *dev, HRMFeature features, bool low_latency) {
       dev->state->spo2_assumed_wear = false;
     }
   }
-#ifdef CONFIG_MFG
+#ifdef CONFIG_HRM_GH3X2X_FACTORY_TEST
   dev->state->work_mode = GH3X2X_FUNCTION_HR | GH3X2X_FUNCTION_SPO2 | GH3X2X_FUNCTION_SOFT_ADT_IR;
 #endif
 

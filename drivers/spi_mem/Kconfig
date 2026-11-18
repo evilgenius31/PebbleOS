@@ -16,12 +16,21 @@ config SPI_MEM_NRF5_QSPI
     help
       Support for the Nordic nRF5 QSPI peripheral.
 
-config SPI_MEM_SF32LB52_MPI
-    bool "SiFli SF32LB52 MPI"
-    default y if SOC_SF32LB52
-    depends on SOC_SF32LB52
+config SPI_MEM_NRF5_QSPI_IRQ_PRIO
+    int "Interrupt priority"
+    default 5
+    depends on SPI_MEM_NRF5_QSPI
     help
-      Support for the SiFli SF32LB52 MPI controller in NOR mode.
+      Priority of the controller interrupt.
+
+config SPI_MEM_SF32LB_MPI
+    bool "SiFli SF32LB MPI"
+    default y if SOC_SF32LB52 || SOC_SF32LB57
+    depends on SOC_SF32LB52 || SOC_SF32LB57
+    select MEMC_SF32LB_MPI
+    help
+      Support for a SPI NOR flash on the SiFli SF32LB52 and SF32LB57 MPI
+      controllers.
 
 module = DRIVER_SPI_MEM
 module-str = SPI memory

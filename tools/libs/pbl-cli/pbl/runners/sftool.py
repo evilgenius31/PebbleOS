@@ -4,6 +4,11 @@
 from .core import Runner, RunnerCaps, RunnerError
 
 
+def flash_xip_base(build):
+    """Where the SoC maps the boot flash, the addresses sftool programs it at."""
+    return build.config.CONFIG_FLASH_BASE
+
+
 class SfToolRunner(Runner):
     name = "sftool"
     lab_ports = ("serial",)
@@ -28,13 +33,17 @@ class SfToolRunner(Runner):
         )
 
     def do_run(self, command):
+        build = self.cfg.build
+        if not build:
+            raise RunnerError("sftool needs the build, for the flash address")
+        base = flash_xip_base(build)
         if command == "flash":
-            files = [self.cfg.hex_file]
+            files = list(self.cfg.flash_files)
             if self.cfg.resources_file:
                 files.append(
-                    f"{self.cfg.resources_file}@{self.cfg.resources_address:#x}"
+                    f"{self.cfg.resources_file}@{base + self.cfg.resources_address:#x}"
                 )
             self._sftool("write_flash " + self.quote(*files))
         elif command == "erase":
-            ranges = [f"{a:#x}:{s:#x}" for a, s in self.cfg.erase_ranges]
+            ranges = [f"{base + a:#x}:{s:#x}" for a, s in self.cfg.erase_ranges]
             self._sftool("erase_region " + self.quote(*ranges))

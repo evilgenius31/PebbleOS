@@ -5,10 +5,9 @@
 
 #include <pbl/drivers/touch.h>
 #include <pbl/drivers/touch/sdl.h>
-#include <pbl/services/system_task.h>
+#include <pbl/kernel/work.h>
 #include <pbl/util/math.h>
 
-#include <board/board.h>
 #include <pbl_arch_posix.h>
 
 struct prv_touch_event {
@@ -40,7 +39,7 @@ static void prv_touch_isr(void *arg) {
     return;
   }
 
-  s_work_pending = system_task_add_callback_from_isr(prv_work, nullptr);
+  s_work_pending = pbl_sys_work_call_from_isr(prv_work, nullptr);
 }
 
 void touch_sdl_changed(bool pressed, int x, int y) {

@@ -21,11 +21,7 @@
  *
  * The SoC factory configuration is a list of records (one byte id, one byte length, data) in OTP
  * cells the board names. The first crystal record found is applied to the 48 MHz crystal
- * oscillator once the flash is up, before the radio core starts:
- *
- * @code{.c}
- * PBL_SF32LB52_HXT_DEFINE(s_hxt, "hxt", &s_flash.flash, "soc-config-user", "soc-config-cust");
- * @endcode
+ * oscillator once the flash is up, before the radio core starts.
  * @{
  */
 
@@ -33,6 +29,8 @@
 struct pbl_sf32lb52_hxt {
   /** Device, a child of the flash. */
   struct pbl_device dev;
+  /** PMUC registers. */
+  uintptr_t base;
   /** Flash holding the factory configuration. */
   const struct pbl_flash *flash;
   /** Names of the OTP cells holding it, in search order. */
@@ -50,18 +48,22 @@ int pbl_sf32lb52_hxt_init(const struct pbl_device *dev);
  *
  * @param sym Symbol of the device.
  * @param _name Name.
+ * @param _base PMUC registers.
  * @param _flash Flash, a struct pbl_flash.
  * @param ... Names of the OTP cells holding the factory configuration, in search order.
  */
-#define PBL_SF32LB52_HXT_DEFINE(sym, _name, _flash, ...)                                \
+#define PBL_SF32LB52_HXT_DEFINE(sym, _name, _base, _flash, ...)                         \
   PBL_DEVICE_STATE_DEFINE(sym);                                                         \
   static const char *const sym##_cells[] = {__VA_ARGS__};                               \
-  const struct pbl_sf32lb52_hxt sym = {                                                 \
+  extern const struct pbl_sf32lb52_hxt sym##_inst;                                      \
+  PBL_DEVICE_REGISTER(sym##_inst, &sym##_inst.dev);                                     \
+  PBL_DEVICE_ALIAS(sym, sym##_inst, struct pbl_sf32lb52_hxt, struct pbl_device, dev);   \
+  const struct pbl_sf32lb52_hxt sym##_inst = {                                          \
     .dev = PBL_DEVICE_INIT(sym, _name, pbl_sf32lb52_hxt_init, &(_flash)->dev, nullptr), \
+    .base = (_base),                                                                    \
     .flash = (_flash),                                                                  \
     .cells = sym##_cells,                                                               \
     .num_cells = sizeof(sym##_cells) / sizeof(sym##_cells[0]),                          \
-  };                                                                                    \
-  PBL_DEVICE_REGISTER(sym, &sym.dev)
+  }
 
 /** @} */

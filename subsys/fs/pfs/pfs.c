@@ -11,6 +11,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <pbl/analytics/analytics.h>
+#include <pbl/board/partitions.h>
 #include <pbl/crc/crc.h>
 #include <pbl/drivers/flash.h>
 #include <pbl/kernel/assert.h>
@@ -21,12 +23,8 @@
 #include <pbl/kernel/mutex.h>
 #include <pbl/kernel/time.h>
 #include <pbl/logging/logging.h>
-#include <pbl/services/analytics/analytics.h>
 #include <pbl/task_wdt/task_wdt.h>
 #include <pbl/util/math.h>
-
-#include <flash_region/filesystem_regions.h>
-#include <kernel/pebble_tasks.h>
 
 PBL_LOG_MODULE_DECLARE(fs, CONFIG_FS_LOG_LEVEL);
 
@@ -34,7 +32,7 @@ static PBL_MUTEX_DEFINE(s_pfs_mutex);
 
 #define IS_FILE_TYPE(file_type, type) ((file_type) == (type))
 
-#define PFS_PAGE_SIZE              FLASH_FILESYSTEM_BLOCK_SIZE
+#define PFS_PAGE_SIZE              SUBSECTOR_SIZE_BYTES
 #define PFS_PAGES_PER_ERASE_SECTOR (SECTOR_SIZE_BYTES / PFS_PAGE_SIZE)
 #define GC_REGION_SIZE             SECTOR_SIZE_BYTES
 
@@ -653,7 +651,13 @@ static PBL_NOINLINE void prv_update_last_written_page(uint16_t next_page) {
 //! @param use_gc_allocator - should be true iff the page should be allocated
 //!      from the region dedicated for garbage collection handling
 //! @param use_page - should be true iff the page is about to be used in a file.
-static status_t find_free_page(uint16_t *free_page, bool use_gc_allocator, bool use_page) {
+//! @param collected - if not NULL, set to whether a sector had to be garbage collected
+static status_t find_free_page(uint16_t *free_page, bool use_gc_allocator, bool use_page,
+                               bool *collected) {
+  if (collected != nullptr) {
+    *collected = false;
+  }
+
   // if we are allocating a file from the garbage collection region,
   // we don't need to search for free pages since we know what ones to use
   if (use_gc_allocator) {
@@ -714,6 +718,9 @@ static status_t find_free_page(uint16_t *free_page, bool use_gc_allocator, bool 
         // we can erase this region and have at least 1 free page after
         uint16_t sector_start_pg = curr_region * PFS_PAGES_PER_ERASE_SECTOR;
         garbage_collect_sector(&next_page, sector_start_pg, sectors_active);
+        if (collected != nullptr) {
+          *collected = true;
+        }
         break;
       }
     }
@@ -747,12 +754,13 @@ static void pfs_prepare_for_file_creation(uint32_t file_size, uint32_t max_elaps
 
   uint16_t last_written_page = s_last_page_written;
   while ((pages_to_find > 0) && (free_page != INVALID_PAGE)) {
+    bool collected;
     pbl_mutex_lock(&s_pfs_mutex, PBL_FOREVER);
-    find_free_page(&free_page, false, false);
+    find_free_page(&free_page, false, false, &collected);
     pbl_mutex_unlock(&s_pfs_mutex);
-    // TODO: might be nice to only sleep here if we had to perform GC as part
-    // of finding a free page
-    if ((pages_to_find % 4) == 0) {
+    // Garbage collection erases a sector, which takes a while, so let other
+    // tasks run after one. Pages that are already erased are found quickly.
+    if (collected) {
       pbl_sleep_ms(2);
     }
     pages_to_find--;
@@ -832,7 +840,7 @@ static status_t create_flash_file(File *f) {
 
   bool use_gc_allocator = (strcmp(f->name, GC_FILE_NAME) == 0);
 
-  if ((rv = find_free_page(&start_page, use_gc_allocator, true)) != S_SUCCESS) {
+  if ((rv = find_free_page(&start_page, use_gc_allocator, true, nullptr)) != S_SUCCESS) {
     return (rv);
   }
 
@@ -852,7 +860,7 @@ static status_t create_flash_file(File *f) {
                     prv_page_to_flash_offset(curr_page) + offsetof(PageHeader, page_flags));
 
     if (pgs_needed > 0) { // do we need to find a free page
-      if ((rv = find_free_page(&next_page, use_gc_allocator, true)) != S_SUCCESS) {
+      if ((rv = find_free_page(&next_page, use_gc_allocator, true, nullptr)) != S_SUCCESS) {
         unlink_flash_file(start_page); // on failure, unallocate
         return (rv);
       }
@@ -2044,7 +2052,7 @@ void pfs_format(bool write_erase_headers) {
   }
 
   // clear out all pages
-  filesystem_regions_erase_all();
+  pbl_flash_partition_erase(PART_FILESYSTEM, 0U, PART_FILESYSTEM_SIZE);
   prv_invalidate_page_flags_cache_all();
 
   if (write_erase_headers) {
@@ -2121,10 +2129,11 @@ uint32_t pfs_crc_calculate_file(int fd, uint32_t offset, uint32_t num_bytes) {
   return (crc);
 }
 
-void pbl_analytics_external_collect_pfs_stats(void) {
+static void prv_collect_pfs_stats(void) {
   uint16_t avail_kilobytes = (uint16_t)(get_available_pfs_space() / 1024);
   PBL_ANALYTICS_SET_UNSIGNED(pfs_space_free_kb, avail_kilobytes);
 }
+PBL_ANALYTICS_COLLECTOR_DEFINE(prv_collect_pfs_stats);
 
 /*
  * Debug Utilities

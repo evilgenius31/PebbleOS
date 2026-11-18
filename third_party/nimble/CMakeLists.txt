@@ -71,15 +71,12 @@ if(CONFIG_BT_HCI_NRF52)
     port/src/nrf52.c
   )
   list(APPEND defines FREERTOS=1 PEBBLEOS NRF52_SERIES)
-elseif(CONFIG_BT_HCI_SF32LB52)
+elseif(CONFIG_BT_HCI_SF32LB)
   list(APPEND sources
-    transport/hci_sf32lb52.c
-    ../nonfree/pebbleos-nonfree/sf32lb52/lcpu_52x.c
+    transport/hci_sf32lb.c
   )
-  if(CONFIG_NIMBLE_HCI_SF32LB52_TRACE_BINARY)
-    pbl_compile_definitions(NIMBLE_HCI_SF32LB52_TRACE NIMBLE_HCI_SF32LB52_TRACE_BINARY)
-  elseif(CONFIG_NIMBLE_HCI_SF32LB52_TRACE_LOG)
-    pbl_compile_definitions(NIMBLE_HCI_SF32LB52_TRACE NIMBLE_HCI_SF32LB52_TRACE_LOG)
+  if(CONFIG_NIMBLE_HCI_SF32LB_TRACE_LOG)
+    pbl_compile_definitions(NIMBLE_HCI_SF32LB_TRACE NIMBLE_HCI_SF32LB_TRACE_LOG)
   endif()
 elseif(CONFIG_BT_HCI_UART)
   list(APPEND sources transport/hci_uart.c)

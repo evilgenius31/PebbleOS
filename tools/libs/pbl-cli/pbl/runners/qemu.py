@@ -24,10 +24,13 @@ GDB_PROXY_PORT = 1233
 class QemuRunner(Runner):
     name = "qemu"
 
-    def __init__(self, cfg, keep_flash_image=False, decoration=None, bt_hci=None):
+    def __init__(
+        self, cfg, keep_flash_image=False, decoration=None, sunlight=False, bt_hci=None
+    ):
         super().__init__(cfg)
         self.keep_flash_image = keep_flash_image
         self.decoration = decoration
+        self.sunlight = sunlight
         self.bt_hci = bt_hci
 
     @classmethod
@@ -53,6 +56,11 @@ class QemuRunner(Runner):
             "'none' (default: the board's first)",
         )
         parser.add_argument(
+            "--sunlight",
+            action="store_true",
+            help="Show the colors as a watch's panel does in sunlight",
+        )
+        parser.add_argument(
             "--bt-hci",
             metavar="CHARDEV",
             help="H4 Bluetooth controller for builds with CONFIG_BT_HCI_UART, "
@@ -65,6 +73,7 @@ class QemuRunner(Runner):
             cfg,
             keep_flash_image=getattr(args, "keep_flash_image", False),
             decoration=getattr(args, "decoration", None),
+            sunlight=getattr(args, "sunlight", False),
             bt_hci=getattr(args, "bt_hci", None),
         )
 
@@ -92,8 +101,30 @@ class QemuRunner(Runner):
         if self.bt_hci and not hci_uart:
             raise RunnerError("--bt-hci needs a build with CONFIG_BT_HCI_UART=y")
 
-        # The flash images are build artifacts. The micro flash is always
-        # rebuilt; the SPI flash only unless the caller wants to keep it.
+        return self.run_program(
+            self._command_line(build, decoration, self._flash_images(build)),
+            cwd=build.topdir,
+        )
+
+    def console_command(self):
+        build = self.cfg.build
+        argv = [
+            self._qemu(build),
+            "-rtc", "base=localtime",
+            "-monitor", "none",
+            "-display", "none",
+            "-no-reboot",
+            "-serial", "null",
+            "-serial", "null",
+            "-serial", "stdio",
+        ]  # fmt: skip
+        images = self._flash_images(build)
+        return argv + self._machine_args(build, images, audio=False), {}
+
+    def _flash_images(self, build):
+        """Build the flash images, which are build artifacts, and return the
+        SPI one. The micro flash is always rebuilt; the SPI flash only
+        unless the caller wants to keep it."""
         targets = [MICRO_FLASH_TARGET]
         spi_flash = build.join(SPI_FLASH_IMAGE)
         if not self.keep_flash_image or not os.path.isfile(spi_flash):
@@ -101,10 +132,14 @@ class QemuRunner(Runner):
         self.call(
             self.quote("cmake", "--build", build, *(f"--target={t}" for t in targets))
         )
+        return spi_flash
 
-        return self.run_program(
-            self._command_line(build, decoration, spi_flash), cwd=build.topdir
-        )
+    @staticmethod
+    def _qemu(build):
+        qemu = os.getenv("PEBBLE_QEMU_BIN")
+        if not qemu or not (os.path.isfile(qemu) and os.access(qemu, os.X_OK)):
+            qemu = build.tool("qemu") or "qemu-pebble"
+        return qemu
 
     def _gdb_proxy(self, port):
         build = self.cfg.build
@@ -128,13 +163,15 @@ class QemuRunner(Runner):
             )
         return self.decoration
 
-    def _machine_args(self, build, spi_flash):
+    def _machine_args(self, build, spi_flash, audio=True):
         machine = build.config.CONFIG_QEMU_MACHINE
         if not machine or machine == "unknown":
             raise RunnerError(f"board {build.board} declares no QEMU machine")
 
-        if build.config.CONFIG_PLATFORM_EMERY or build.config.CONFIG_PLATFORM_FLINT:
+        if build.config.CONFIG_DT_HAS_QEMU_PEBBLE_AUDIO_ENABLED:
             driver = "coreaudio" if platform.system() == "Darwin" else "sdl"
+            if not audio:
+                driver = "none"
             machine_args = [
                 "-machine", f"{machine},audiodev=snd0",
                 "-audiodev", f"{driver},id=snd0",
@@ -149,14 +186,13 @@ class QemuRunner(Runner):
         ]
 
     def _command_line(self, build, decoration, spi_flash):
-        qemu = os.getenv("PEBBLE_QEMU_BIN")
-        if not qemu or not (os.path.isfile(qemu) and os.access(qemu, os.X_OK)):
-            qemu = build.tool("qemu") or "qemu-pebble"
-
+        qemu = self._qemu(build)
         machine_args = self._machine_args(build, spi_flash)
 
         display = f"sdl,decoration={decoration}" if decoration else "sdl"
         machine_args += ["-display", f"{display},show-cursor=on"]
+        if self.sunlight:
+            machine_args += ["-global", "pebble-display.sunlight=true"]
 
         # Both control sockets are recreated on every launch.
         monitor = build.join(emulator.MONITOR_SOCKET)

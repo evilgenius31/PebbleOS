@@ -6,16 +6,17 @@
 #include <stdint.h>
 #include <string.h>
 
+#include <pbl/devicetree.h>
 #include <pbl/drivers/flash/spi_nor.h>
 #include <pbl/kernel/delay.h>
 #include <pbl/logging/logging.h>
 #include <pbl/util/math.h>
 #include <pbl/util/misc.h>
 #include <pbl/util/size.h>
+#include <pbl/util/units.h>
 
 PBL_LOG_MODULE_DECLARE(driver_flash, CONFIG_DRIVER_FLASH_LOG_LEVEL);
 
-#define US_PER_MS            1000U
 #define ID_LEN               3U
 #define ADDR_3BYTE           3U
 #define ADDR_4BYTE           4U
@@ -776,6 +777,14 @@ static int prv_init(const struct pbl_flash *flash) {
     return -ENODEV;
   }
 
+  if (nor->vcc != nullptr) {
+    ret = pbl_regulator_enable(nor->vcc);
+    if (ret != 0) {
+      return ret;
+    }
+    pbl_sleep_us(nor->part->power_up_us);
+  }
+
   // Abort any program or erase left over from before the reset, unless the CPU runs from the part
   if (!pbl_spi_mem_is_xip(nor->bus)) {
     ret = prv_cmd(nor, PBL_FLASH_NOR_CMD_RSTEN);
@@ -789,7 +798,7 @@ static int prv_init(const struct pbl_flash *flash) {
     }
 
     if (pbl_flash_in_coredump(flash)) {
-      pbl_busy_wait_us(nor->part->reset_ms * US_PER_MS);
+      pbl_busy_wait_us(nor->part->reset_ms * PBL_USEC_PER_MSEC);
     } else {
       pbl_sleep_ms(nor->part->reset_ms);
     }
@@ -802,8 +811,12 @@ static int prv_init(const struct pbl_flash *flash) {
 
   jedec_id = (uint32_t)id[0] | ((uint32_t)id[1] << 8) | ((uint32_t)id[2] << 16);
   if (jedec_id != nor->part->id) {
-    PBL_LOG_WRN("Flash is not %s (id 0x%06" PRIx32 ")", nor->part->name, jedec_id);
+    PBL_LOG_ERR("Flash id 0x%06" PRIx32 ", expected 0x%06" PRIx32, jedec_id, nor->part->id);
+    return -ENODEV;
   }
+
+  nor->data->otp = nor->part->otp.info;
+  PBL_LOG_DBG("Flash %s", nor->part->name);
 
   ret = prv_probe(nor);
   if (ret != 0) {
@@ -831,10 +844,9 @@ static int prv_read_op(const struct pbl_flash_spi_nor *nor, uint32_t offs, void 
 }
 
 // Through the window where it reaches, through operations beyond
-static int prv_read(const struct pbl_flash *flash, uint32_t addr, void *buf, size_t len) {
+static int prv_read(const struct pbl_flash *flash, uint32_t offs, void *buf, size_t len) {
   const struct pbl_flash_spi_nor *nor = prv_nor(flash);
   const struct pbl_spi_mem_dirmap *dm = &nor->data->dirmap;
-  uint32_t offs = addr - flash->base;
   uint8_t *dst = buf;
   int ret;
 
@@ -865,11 +877,10 @@ static int prv_read(const struct pbl_flash *flash, uint32_t addr, void *buf, siz
   return 0;
 }
 
-static int prv_write(const struct pbl_flash *flash, uint32_t addr, const void *buf, size_t len) {
+static int prv_write(const struct pbl_flash *flash, uint32_t start, const void *buf, size_t len) {
   const struct pbl_flash_spi_nor *nor = prv_nor(flash);
   const struct pbl_flash_spi_nor_data *data = nor->data;
   const uint32_t page_size = data->geometry.page_size;
-  const uint32_t start = addr - flash->base;
   const size_t total = len;
   uint32_t offset = start;
   const uint8_t *src = buf;
@@ -906,10 +917,9 @@ static int prv_write(const struct pbl_flash *flash, uint32_t addr, const void *b
   return ret;
 }
 
-static int prv_erase(const struct pbl_flash *flash, uint32_t addr, uint32_t size) {
+static int prv_erase(const struct pbl_flash *flash, uint32_t offset, uint32_t size) {
   const struct pbl_flash_spi_nor *nor = prv_nor(flash);
   const struct pbl_flash_spi_nor_data *data = nor->data;
-  const uint32_t offset = addr - flash->base;
   struct pbl_spi_mem_op op;
   uint8_t opcode;
   int ret;
@@ -1000,6 +1010,25 @@ static void prv_power_down(const struct pbl_flash *flash, pbl_flash_pm_fn_t fn, 
   const struct pbl_flash_spi_nor *nor = prv_nor(flash);
 
   pbl_spi_mem_power_down(nor->bus, &nor->data->pm, fn, arg);
+}
+
+static int prv_pm_suspend(const struct pbl_flash *flash) {
+  const struct pbl_flash_spi_nor *nor = prv_nor(flash);
+
+  return pbl_spi_mem_pm_suspend(nor->bus, &nor->data->pm);
+}
+
+static void prv_pm_resume(const struct pbl_flash *flash) {
+  const struct pbl_flash_spi_nor *nor = prv_nor(flash);
+
+  pbl_spi_mem_pm_resume(nor->bus, &nor->data->pm);
+}
+
+static void prv_pm_times(const struct pbl_flash *flash, uint32_t *enter_us, uint32_t *exit_us) {
+  const struct pbl_flash_spi_nor *nor = prv_nor(flash);
+
+  *enter_us = nor->data->pm.enter_us;
+  *exit_us = nor->data->pm.exit_us;
 }
 
 // Leaves the part as it powers up; the next init probes it again
@@ -1138,6 +1167,9 @@ const struct pbl_flash_ops pbl_flash_spi_nor_ops = {
   .erase_suspend = prv_erase_suspend,
   .erase_resume = prv_erase_resume,
   .power_down = prv_power_down,
+  .pm_suspend = prv_pm_suspend,
+  .pm_resume = prv_pm_resume,
+  .pm_times = prv_pm_times,
   .stop = prv_stop,
   .otp_read = prv_otp_read,
   .otp_write = prv_otp_write,
@@ -1145,3 +1177,5 @@ const struct pbl_flash_ops pbl_flash_spi_nor_ops = {
   .otp_lock = prv_otp_lock,
   .otp_erase = prv_otp_erase,
 };
+
+#include PBL_DT_INSTANCES(jedec_spi_nor)

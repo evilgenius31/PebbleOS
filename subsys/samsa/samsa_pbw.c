@@ -14,11 +14,11 @@
 
 #include <pbl/fs/fs.h>
 #include <pbl/kernel/malloc.h>
+#include <pbl/kernel/work.h>
 #include <pbl/logging/logging.h>
 #include <pbl/services/app_cache.h>
 #include <pbl/services/blob_db/app_db.h>
 #include <pbl/services/process_management/app_storage.h>
-#include <pbl/services/system_task.h>
 #include <pbl/util/size.h>
 
 #include <kernel/event_loop.h>
@@ -33,20 +33,18 @@
 
 PBL_LOG_MODULE_DECLARE(samsa, CONFIG_SAMSA_LOG_LEVEL);
 
-// The platform directories of a .pbw to take an app from, best first.
+// The platform directories of a .pbw to take an app from, best first: the
+// platform's own, then that of the frozen platform of its shape and colour
+// depth, then the root, where 2.x apps are.
 static const char *const s_platforms[] = {
-#if defined(CONFIG_PLATFORM_EMERY)
-  "emery/",
+  CONFIG_PLATFORM_NAME "/",
+#if defined(CONFIG_PLATFORM_ROUND)
+  "chalk/",
+#elif defined(CONFIG_PLATFORM_COLOR)
   "basalt/",
   "",
-#elif defined(CONFIG_PLATFORM_GABBRO)
-  "gabbro/",
-  "chalk/",
-#elif defined(CONFIG_PLATFORM_FLINT)
-  "flint/",
-  "diorite/",
-  "",
 #else
+  "diorite/",
   "",
 #endif
 };
@@ -305,9 +303,9 @@ static void prv_install(void *data) {
 
 //! On KernelMain, which takes events once the launcher runs, after the
 //! services an install needs have started. The work itself goes to the
-//! system task.
+//! background work queue.
 static void prv_install_when_ready(void *data) {
-  system_task_add_callback(prv_install, data);
+  pbl_sys_work_call(prv_install, data);
 }
 
 static void prv_install_isr(void *arg) {

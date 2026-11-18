@@ -1,6 +1,7 @@
 /* SPDX-FileCopyrightText: 2026 Core Devices LLC */
 /* SPDX-License-Identifier: Apache-2.0 */
 
+#include <pbl/devicetree.h>
 #include <pbl/drivers/input/gpio_keys.h>
 #include <pbl/input/input.h>
 #include <pbl/util/misc.h>
@@ -58,6 +59,13 @@ static int prv_key_init(const struct pbl_gpio_keys_key *key,
     return ret;
   }
 
+  if (key->wakeup_source) {
+    ret = pbl_intc_set_wake(&irq, true);
+    if (ret != 0) {
+      return ret;
+    }
+  }
+
   ret = pbl_intc_enable(&irq);
   if (ret != 0) {
     return ret;
@@ -81,3 +89,5 @@ int pbl_gpio_keys_init(const struct pbl_device *dev) {
 
   return 0;
 }
+
+#include PBL_DT_INSTANCES(gpio_keys)

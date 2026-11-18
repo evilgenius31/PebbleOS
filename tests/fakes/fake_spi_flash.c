@@ -7,13 +7,13 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <pbl/board/partitions.h>
 #include <pbl/drivers/flash.h>
+#include <pbl/system/status_codes.h>
 
 #include <clar_asserts.h>
-#include <flash_region/flash_region.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <system/status_codes.h>
 #include <unistd.h>
 
 typedef struct FakeFlashState {
@@ -45,30 +45,11 @@ void fake_spi_flash_init(uint32_t offset, uint32_t length) {
   // Clients are not required to cleanup due to prior code, so do so here.
   fake_spi_flash_cleanup();
 
-  // Tests historically pass (0, 0x1000000) — sized for snowy's flash layout where the filesystem
-  // sits inside the first 16 MB. On platforms with a non-zero FLASH_REGION_BASE_ADDRESS (e.g.
-  // obelix, whose flash addresses are absolute and start at 0x12000000), translate offset 0 to the
-  // base address so the fake window doesn't span the huge unused gap below it, and then expand the
-  // window if it still doesn't reach FLASH_REGION_FILESYSTEM_END. Without this, obelix tests would
-  // allocate ~319 MB per test and trip DUMA's protect-free OOM guard.
-#if defined(FLASH_REGION_BASE_ADDRESS) && (FLASH_REGION_BASE_ADDRESS > 0)
-  if (offset == 0) {
-    offset = FLASH_REGION_BASE_ADDRESS;
+  // Tests pass small windows: grow them over the partitions code reaches past the filesystem.
+  const uint32_t end = PART_SHARED_PRF_STORAGE_OFFSET + PART_SHARED_PRF_STORAGE_SIZE;
+  if (offset + length < end) {
+    length = end - offset;
   }
-#endif
-#ifdef FLASH_REGION_FILESYSTEM_END
-  if (offset + length < FLASH_REGION_FILESYSTEM_END) {
-    length = FLASH_REGION_FILESYSTEM_END - offset;
-  }
-#endif
-#ifdef FLASH_REGION_SHARED_PRF_STORAGE_END
-  // On platforms with regions beyond the filesystem (TZINFO, MFG_INFO,
-  // SHARED_PRF_STORAGE — present on gd25q256e/obelix layouts), grow far enough
-  // to cover them so flash_read_bytes doesn't trip the bounds check.
-  if (offset + length < FLASH_REGION_SHARED_PRF_STORAGE_END) {
-    length = FLASH_REGION_SHARED_PRF_STORAGE_END - offset;
-  }
-#endif
 
   s_state.offset = offset;
   s_state.length = length;
@@ -224,7 +205,6 @@ static const struct pbl_flash_geometry s_geometry = {
 };
 
 static const struct pbl_flash s_flash = {
-  .base = 0U,
   .geometry = &s_geometry,
 };
 

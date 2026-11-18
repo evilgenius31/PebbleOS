@@ -1,10 +1,19 @@
 name: Integration Tests (hardware)
+run-name: >-
+  ${{ inputs.ref && format('Integration Tests (hardware): {0}', inputs.ref) ||
+      github.event.pull_request.title || 'Integration Tests (hardware)' }}
 
 on:
   schedule:
     - cron: "0 2 * * *"
   pull_request_target:
     types: [labeled]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch, tag or SHA to test, defaults to the selected branch
+        required: false
+        default: ""
 
 permissions: {}
 
@@ -43,13 +52,15 @@ jobs:
     needs: authorize
     if: >
       !cancelled() &&
-      (github.event_name == 'schedule' || needs.authorize.result == 'success')
+      (github.event_name == 'schedule' ||
+       github.event_name == 'workflow_dispatch' ||
+       needs.authorize.result == 'success')
     runs-on: ubuntu-24.04
     permissions:
       contents: read
 
     container:
-      image: ghcr.io/coredevices/pebbleos-docker:v10
+      image: ghcr.io/coredevices/pebbleos-docker:v16
 
     strategy:
       fail-fast: false
@@ -75,7 +86,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || inputs.ref }}
           fetch-depth: 0
           submodules: true
           persist-credentials: false
@@ -111,7 +122,8 @@ jobs:
             build/pebbleos.elf
             build/pebbleos.hex
             build/system_resources.pbpack
-            build/fw/loghash_dict.json
+            build/log.dict.json
+            build/generated/include/devicetree/partitions.h
             build/normal_*.pbz
 
   test:
@@ -143,7 +155,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || inputs.ref }}
           persist-credentials: false
           allow-unsafe-pr-checkout: true
 

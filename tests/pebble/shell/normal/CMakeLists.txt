@@ -1,0 +1,57 @@
+# SPDX-FileCopyrightText: 2026 Core Devices LLC
+# SPDX-License-Identifier: Apache-2.0
+
+pbl_clar_test(test_normal_system_app_state_machine
+  SOURCES
+    pebble/shell/normal/system_app_state_machine.c
+)
+
+pbl_clar_test(test_app_idle_timeout
+  SOURCES
+    pebble/shell/normal/app_idle_timeout.c
+)
+
+pbl_clar_test(test_battery_ui_fsm
+  SOURCES
+    pebble/shell/normal/battery_ui_fsm.c
+    pebble/services/battery/voltage/battery_curve.c
+  PLATFORMS emery
+  DEFINES
+    CONFIG_BATTERY_WARNING_FIRST_PERCENT=0
+    CONFIG_BATTERY_WARNING_SECOND_PERCENT=0
+    CONFIG_SERVICE_BATTERY_LOW_POWER_PERCENT=5
+    CONFIG_SERVICE_BATTERY_CAPACITY_HOURS=144
+  OVERRIDES dummy_board
+)
+
+pbl_clar_test(test_battery_ui_fsm_percent
+  SOURCE test_battery_ui_fsm.c
+  SOURCES
+    pebble/shell/normal/battery_ui_fsm.c
+    pebble/services/battery/voltage/battery_curve.c
+  PLATFORMS emery
+  DEFINES
+    CONFIG_BATTERY_WARNING_FIRST_PERCENT=12
+    CONFIG_BATTERY_WARNING_SECOND_PERCENT=8
+    CONFIG_SERVICE_BATTERY_LOW_POWER_PERCENT=5
+    CONFIG_SERVICE_BATTERY_CAPACITY_HOURS=144
+  OVERRIDES dummy_board
+)
+
+pbl_clar_test(test_watchface_touch
+  SOURCES
+    pebble/shell/normal/watchface_touch.c
+    pebble/applib/graphics/gtypes.c
+    pebble/applib/ui/layer.c
+    pebble/applib/ui/recognizer/recognizer.c
+    pebble/applib/ui/recognizer/recognizer_manager.c
+    pebble/applib/ui/recognizer/swipe.c
+    tests/fakes/fake_rtc.c
+  DEFINES CONFIG_TOUCH
+)
+
+pbl_clar_test(test_dark_mode_updater
+  SOURCES
+    pebble/shell/normal/dark_mode_updater.c
+    tests/fakes/fake_rtc.c
+)

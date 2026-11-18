@@ -12,7 +12,7 @@
  * @brief Generic helpers shared by the firmware, the bootloader and host tools (@c lib/util).
  *
  * The library does not depend on the kernel. Logging and assertions go through util_log() and
- * util_assertion_failed(), weak functions the firmware overrides.
+ * util_assertion_failed(), weak functions PebbleOS overrides in @c lib/c.
  *
  * @code{.c}
  * static const uint16_t s_rates[] = {10, 25, 50, 100};
@@ -41,7 +41,7 @@
  * @param member Name of the member within @p type.
  * @return Pointer to the containing structure.
  */
-#define container_of(ptr, type, member) ((type *)((char *)(ptr) - (size_t)&(((type *)0)->member)))
+#define container_of(ptr, type, member) ((type *)((char *)(ptr) - offsetof(type, member)))
 
 /**
  * @brief Swap the values of two lvalues of the same type.

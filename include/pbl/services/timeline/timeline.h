@@ -4,9 +4,8 @@
 #pragma once
 #include <pbl/kernel/time.h>
 #include <pbl/services/timeline/item.h>
+#include <pbl/system/status_codes.h>
 #include <pbl/util/iterator.h>
-
-#include <system/status_codes.h>
 
 /**
  * @defgroup services_timeline Timeline
@@ -133,6 +132,16 @@ bool timeline_exists(Uuid *id);
  * @param enable true to enable.
  */
 void timeline_enable_ancs_bulk_action_mode(bool enable);
+
+/**
+ * @brief Enable or disable asynchronous sending of remote actions.
+ *
+ * When enabled, actions sent to the phone are queued on the background work queue instead of
+ * blocking the caller until there is room in the send buffer.
+ *
+ * @param enable true to enable.
+ */
+void timeline_enable_async_remote_action_mode(bool enable);
 
 /**
  * @brief Check whether bulk mode for ANCS actions is enabled.

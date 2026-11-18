@@ -11,10 +11,7 @@
 #include <string.h>
 
 #include <pbl/kernel/compiler.h>
-
-#include <system/die.h>
-#include <system/reboot_reason.h>
-#include <system/status_codes.h>
+#include <pbl/system/status_codes.h>
 
 /**
  * @defgroup logging Logging
@@ -183,6 +180,20 @@ void pbl_log_filtered(uint8_t log_level, const char *src_filename, int src_line_
  */
 void pbl_log_filtered_sync(uint8_t log_level, const char *src_filename, int src_line_number,
                            const char *fmt, ...) PBL_FORMAT_PRINTF(4, 5);
+
+/**
+ * @brief Log a message from a fault handler, sent before returning.
+ *
+ * For contexts where OS services can't be trusted: never filtered, never recorded to flash, and
+ * formatted on a small stack buffer. Prefer PBL_LOG_FAULT().
+ *
+ * @param src_filename Source file name.
+ * @param src_line_number Source line number.
+ * @param fmt printf-style format.
+ * @param ... Format arguments.
+ */
+void pbl_log_fault(const char *src_filename, int src_line_number, const char *fmt, ...)
+    PBL_FORMAT_PRINTF(3, 4);
 
 /**
  * @brief Log data as xxd-style lines of 16 bytes, sent before returning.
@@ -527,8 +538,19 @@ int pbl_log_get_bin_format(char *buffer, int buffer_len, const uint8_t log_level
   } while (0)
 #endif
 #else // !CONFIG_LOG
-#define PBL_LOG_COLOR(level, color, fmt, ...)
-#define PBL_LOG_COLOR_SYNC(level, color, fmt, ...)
+/** @cond INTERNAL_HIDDEN */
+static inline void _pbl_log_unused(const char *fmt, ...) PBL_FORMAT_PRINTF(1, 2);
+static inline void _pbl_log_unused(const char *fmt, ...) {
+}
+/** @endcond */
+// Arguments stay used, and the format checked, but nothing is evaluated.
+#define PBL_LOG_COLOR(level, color, fmt, ...) \
+  do {                                        \
+    if (0) {                                  \
+      _pbl_log_unused(fmt, ##__VA_ARGS__);    \
+    }                                         \
+  } while (0)
+#define PBL_LOG_COLOR_SYNC(level, color, fmt, ...) PBL_LOG_COLOR(level, color, fmt, ##__VA_ARGS__)
 #endif // CONFIG_LOG
 
 // Level-named macros (async)
@@ -579,6 +601,14 @@ int pbl_log_get_bin_format(char *buffer, int buffer_len, const uint8_t log_level
  */
 #define PBL_LOG_VERBOSE(fmt, ...) \
   PBL_LOG_COLOR(LOG_LEVEL_DEBUG_VERBOSE, LOG_COLOR_FOR_VERBOSE, fmt, ##__VA_ARGS__)
+
+/**
+ * @brief Log a message from a fault handler, sent before returning.
+ *
+ * @param fmt printf-style format, a string literal.
+ * @param ... Format arguments.
+ */
+#define PBL_LOG_FAULT(fmt, ...) pbl_log_fault(__FILE_NAME__, __LINE__, fmt, ##__VA_ARGS__)
 
 // Level-named sync macros
 /**
@@ -648,7 +678,13 @@ int pbl_log_get_bin_format(char *buffer, int buffer_len, const uint8_t log_level
     }                                                                \
   } while (0)
 #else
-#define PBL_LOG_HEXDUMP(level, data, length)
+#define PBL_LOG_HEXDUMP(level, data, length) \
+  do {                                       \
+    if (0) {                                 \
+      (void)(data);                          \
+      (void)(length);                        \
+    }                                        \
+  } while (0)
 #endif
 
 /**

@@ -13,8 +13,8 @@
  * @ingroup subsys
  * @brief Bluetooth Low Energy stack interface (@c pbl/bluetooth).
  *
- * The firmware's Bluetooth code (@c fw/comm/ble and @c fw/services/bluetooth) talks to the stack
- * only through the @c pbl_bt_* API declared in these headers. It is implemented in
+ * The firmware's Bluetooth code (@c pebble/comm/ble and @c pebble/services/bluetooth) talks to the
+ * stack only through the @c pbl_bt_* API declared in these headers. It is implemented in
  * @c subsys/bluetooth on top of the NimBLE host, which runs in its own task.
  *
  * The API has two directions:
@@ -26,7 +26,7 @@
  *
  * The NimBLE host reaches its controller through the HCI transport selected with the
  * @c BT_HCI_* Kconfig choice: the in-image NimBLE link layer (@c BT_HCI_NRF52), the SiFli LCPU
- * over IPC (@c BT_HCI_SF32LB52), H4 over UART (@c BT_HCI_UART) or a fake controller
+ * over IPC (@c BT_HCI_SF32LB), H4 over UART (@c BT_HCI_UART) or a fake controller
  * (@c BT_HCI_FAKE). The fake controller, used on QEMU, accepts every HCI command and never raises
  * an event: the host synchronizes and the GATT server runs, but no link is ever established.
  *
